@@ -11,7 +11,7 @@ let cells = rows * cols
 let addr_bits = 15 (* ceil_log2(135*135)=15 *)
 
 (* 32 cells/cycle lanes *)
-let lanes = 512
+let lanes = 18
 
 (* Extended padded grid: (rows+2) x (cols+2) with zeros around border. *)
 let ext_rows = rows + 2
