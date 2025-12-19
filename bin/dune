@@ -1,0 +1,8 @@
+(executables
+ (modes byte exe)
+ (names generate solve_day4)
+ (libraries core.command core_unix.command_unix core core_unix hardcaml
+   advent_of_caml hardcaml_test_harness hardcaml_waveterm re jane_rope)
+ (preprocess
+  (pps ppx_jane ppx_hardcaml))
+ (promote))

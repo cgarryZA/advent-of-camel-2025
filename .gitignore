@@ -1,0 +1,9 @@
+_build
+*.install
+*.merlin
+_opam
+
+*.bc
+*.exe
+
+*input.txt
