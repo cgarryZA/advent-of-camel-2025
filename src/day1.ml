@@ -136,5 +136,5 @@ let create scope
 
 let hierarchical scope =
   let module Scoped = Hierarchy.In_scope (I) (O) in
-  Scoped.hierarchical ~scope ~name:"day1_dial" create
+  Scoped.hierarchical ~scope ~name:"day1" create
 ;;

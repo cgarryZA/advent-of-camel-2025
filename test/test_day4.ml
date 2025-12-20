@@ -2,7 +2,7 @@ open! Core
 open! Hardcaml
 open! Hardcaml_test_harness
 
-module Day4 = Advent_of_caml.Day4_toiletpaper
+module Day4 = Advent_of_caml.Day4
 module Harness = Cyclesim_harness.Make (Day4.I) (Day4.O)
 
 let ( <--. ) = Bits.( <--. )

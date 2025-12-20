@@ -1,10 +1,10 @@
 opam-version: "2.0"
-maintainer: "Jane Street developers"
-authors: ["Jane Street Group, LLC"]
-homepage: "https://github.com/janestreet/hardcaml_template_project"
-bug-reports: "https://github.com/janestreet/hardcaml_template_project/issues"
-dev-repo: "git+https://github.com/janestreet/hardcaml_template_project.git"
-doc: "https://ocaml.janestreet.com/ocaml-core/latest/doc/hardcaml_template_project/index.html"
+maintainer: "Christian Garry"
+authors: ["Christian Garry"]
+homepage: "https://github.com/cgarryZA/advent-of-camel"
+bug-reports: "https://github.com/cgarryZA/advent-of-camel/issues"
+dev-repo: "git+https://github.com/cgarryZA/advent-of-camel.git"
+doc: "https://github.com/cgarryZA/advent-of-camel"
 license: "MIT"
 build: [
   ["dune" "build" "-p" name "-j" jobs]
@@ -14,7 +14,7 @@ depends: [
   "dune" {>= "3.17.0"}
 ]
 available: arch != "arm32" & arch != "x86_32"
-synopsis: "Simple starter project for hardcaml development"
+synopsis: "Advent of Code in Hardcaml"
 description: "
-A simple starter project including a hardcaml design, testbench, and RTL generation.
+A project including a hardcaml design, testbench, and RTL generation for several Advent Of Code submissions.
 "
