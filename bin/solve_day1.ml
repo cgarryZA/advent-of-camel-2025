@@ -2,7 +2,7 @@ open! Core
 open! Hardcaml
 open! Hardcaml_test_harness
 
-module Day1 = Advent_of_caml.Day1_dial
+module Day1 = Advent_of_caml.Day1
 module Harness = Cyclesim_harness.Make (Day1.I) (Day1.O)
 
 let ( <--. ) = Bits.( <--. )
@@ -76,7 +76,7 @@ let run_file filename =
 
 let command =
   Command.basic
-    ~summary:"Run Day1_dial cyclesim on an input file and print p1/p2"
+    ~summary:"Run Day1 cyclesim on an input file and print p1/p2"
     [%map_open.Command
       let file = anon ("file" %: string) in
       fun () -> run_file file]
