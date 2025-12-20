@@ -17,13 +17,13 @@ open! Always
    Double-buffer RAM alternates source/destination each pass until no removals.
    ============================================================================ *)
 
+let lanes = 64
+
 let rows = 135
 let cols = 135
 
 let ext_rows = rows + 2
 let ext_cols = cols + 2
-
-let lanes = 64
 
 let words_per_row = (ext_cols + lanes - 1) / lanes
 let stride = words_per_row + 2
