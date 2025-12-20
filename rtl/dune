@@ -1,0 +1,24 @@
+(rule
+ (targets day1_top.v)
+ (deps    %{exe:../bin/generate.exe})
+ (action  (with-stdout-to %{targets}
+           (run %{exe:../bin/generate.exe} day1))))
+
+(rule
+ (targets day4_engine_135x135_l64.v)
+ (deps    %{exe:../bin/generate.exe})
+ (action  (with-stdout-to %{targets}
+           (run %{exe:../bin/generate.exe} day4-engine -rows 135 -cols 135 -lanes 64))))
+
+(rule
+ (targets day4_stream_135x135_l64.v)
+ (deps    %{exe:../bin/generate.exe})
+ (action  (with-stdout-to %{targets}
+           (run %{exe:../bin/generate.exe} day4-stream -rows 135 -cols 135 -lanes 64))))
+
+(alias
+ (name rtl)
+ (deps
+  day1_top.v
+  day4_engine_135x135_l64.v
+  day4_stream_135x135_l64.v))
