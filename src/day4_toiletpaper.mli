@@ -2,8 +2,14 @@ open! Hardcaml
 
 val rows : int
 val cols : int
-val cells : int
-val addr_bits : int
+val ext_rows : int
+val ext_cols : int
+
+val lanes : int
+val words_per_row : int
+val stride : int
+val words_total : int
+val load_addr_bits : int
 
 module I : sig
   type 'a t =
@@ -12,8 +18,8 @@ module I : sig
     ; start : 'a
     ; finish : 'a
     ; load_we : 'a
-    ; load_addr : 'a [@bits addr_bits]
-    ; load_data : 'a
+    ; load_addr : 'a [@bits load_addr_bits]
+    ; load_word : 'a [@bits lanes]
     }
   [@@deriving hardcaml]
 end

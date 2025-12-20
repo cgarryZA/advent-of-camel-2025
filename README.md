@@ -1,12 +1,80 @@
-Hardcaml Parallel Grid Processor: Advent of Code 2025OverviewThis project implements a high-performance hardware accelerator in Hardcaml designed to solve grid-based cellular automata puzzles (like Advent of Code Day 4).Instead of processing the $135 \times 135$ grid pixel-by-pixel, this design employs a 18-lane SIMD (Single Instruction, Multiple Data) architecture. It treats the grid as a series of 18-bit words, processing an entire horizontal slice of a window in a single clock cycle.Key Architectural Features1. 18-Lane Parallel PipelineThe core engine operates on 18 cells per cycle. This is achieved by:Bit-Sliced Logic: Using custom maj (majority) and bit-sliced adders (add2_2bit, add2_3bit) to calculate neighbor populations across 18 lanes simultaneously without the area overhead of 18 independent integer adders.Sliding Window Buffer: The design maintains three rows (North, Center, South) in flight. By using delay_n primitives, it synchronizes these rows so that the 8 neighbors of a center cell are always available to the logic.2. High-Efficiency Population CountTo determine if a cell should be "removed," the design calculates the sum of neighbors. Rather than using standard OCaml + operators (which would instantiate heavy adders), we implement a Carry-Save Adder (CSA) tree:Layer 1: 4 pairs of bits are reduced to 2-bit sums.Layer 2: 2-bit sums are reduced to a 4-bit result representing the 0-8 neighbor count.Logic: A cell is flagged for removal if the center is active and the neighbor count is $< 4$ (lt4).3. Double-Buffered Memory SystemTo support iterative updates without "race conditions" (where a new pixel value affects a neighbor in the same pass), the design implements a ping-pong buffering scheme:RAM A & RAM B: Two distinct memory banks.Which-Switch: A control signal (which) toggles every iteration, swapping the roles of "Source" and "Destination" memory.Hardware Realism: The design uses a 1-cycle read latency model, with rd_valids_pipelined ensuring that data is only processed when the RAM output is valid, effectively handling the grid boundaries and pipeline startup.State Machine LogicThe controller iterates through five distinct states to ensure full synchronization:StateDescriptionIdleWaits for the start signal; resets registers.PrimePre-fills the row pipelines (North/Center/South) so the first "valid" window is ready.ScanThe high-speed processing state. Slides across the grid, calculating removals and writing to the destination RAM.CheckEvaluates if any changes occurred. If removed > 0, it flips the RAMs and starts a new iteration.FinishedHalts and asserts the finished signal with final results in p1 and p2.Implementation DetailsGrid Dimensions: $135 \times 135$ (synthesizable to internal FPGA Block RAM).Word Size: 18 bits (aligned with FPGA logic fabric optimization).Latency Management: Explicit use of delay_n to match the words_per_row offset, ensuring the North row is exactly one grid-width ahead of the Center row.How to RunBuild: Run dune build to compile the Hardcaml circuit.Simulate: Use the provided testbench to verify the grid transitions.Synthesize: The hierarchical output is ready for synthesis into Verilog via the Hardcaml RTL generator.
+# Advent of Code - Day 4: High-Throughput Hardware Solver
 
+This project implements a hardware-accelerated solver for Advent of Code Day 4 using Hardcaml. It is designed to run on an FPGA or via high-performance RTL simulation, utilizing bit-sliced parallel processing to handle grid-based cellular automata.
+
+## Architecture Overview
+
+The solver uses a streaming, 2D-sliding window architecture to process grid bits in parallel. It is designed to find and remove specific patterns (cellular automata rules) until a steady state is reached.
+
+### Key Features:
+- Parallel Processing: Processes 32 bits (lanes) per clock cycle.
+- Pipelined Windowing: Implements a 3x3 sliding window across packed data words using a stride-based delay line.
+- Double Buffering: Utilizes two separate RAM banks (grid_mem and grid_next) to allow simultaneous read/write operations during state transitions.
+- Bit-Sliced Logic: Uses a custom bit-sliced popcount and comparison tree to determine cell transitions for all 32 lanes in a single cycle.
+
+
+
+## Data Layout & Padding
+
+To simplify boundary conditions, the original 135x135 grid is transformed into an extended 137x137 grid (1-cell zero-padding on all sides).
+
+- words_per_row: The number of packed 32-bit words needed to store one extended row.
+- stride: Includes 2 additional "dummy" words per row to flush the horizontal pipeline registers, ensuring every real bit passes through the center of the 3x3 window.
+
+
+
+## Hardware State Machine
+
+The controller manages the lifecycle of the computation through five primary states:
+
+1. Idle: Initial state, waits for the `start` signal. Handles memory loading.
+2. Prime: Pre-fills the pipeline delay lines so that the first valid data reaches the processing window.
+3. Scan: The main execution loop. It reads from the source RAM, applies the logic, writes to the destination RAM, and accumulates the "removed" count.
+4. Check: Evaluates the total removals. If zero, the process is complete. If non-zero, it swaps the RAM roles (double buffering) and starts a new pass.
+5. Finished: Asserts the `finished` signal and holds the results for Part 1 and Part 2.
+
+## Performance (Tested on 135x135 Input)
+
+## 16 Lanes
+- Cycles: ~78,240
+- Execution Time: ~0.144s
+- Throughput:
+- Throughput: 16 bits/cycle
+
+## 32 Lanes
+- Cycles: ~49,890
+- Execution Time: ~0.096s (Simulation/Host overhead included)
+- Throughput: 32 bits/cycle
+
+## 64 Lanes
+- Cycles: ~35,720
+- Execution Time: ~0.074s
+- Throughput: 64 bits/cycle
+
+## Requirements
+
+- OCaml / Opam
+- Hardcaml
+- Core
+- Dune (Build system)
+
+## Usage
+
+To build the project:
+$ dune build
+
+To run the solver against your input:
+$ dune exec -- bin/solve_day4.exe day4input.txt
+
+
+Both 15 bits and updated adder
 Part 1: 1389                        
 Part 2: 9000
-Cycles: 952 450
-Time  : 3.1s
+Cycles: 35716
+Time  : 0.109s
 
-18
+32 bits and updated adder
 Part 1: 1389                        
 Part 2: 9000
-Cycles: 56950
-Time  : 498.444ms
+Cycles: 35716
+Time  : 0.107s

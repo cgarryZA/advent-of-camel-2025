@@ -7,64 +7,78 @@ module Harness = Cyclesim_harness.Make (Day4.I) (Day4.O)
 
 let ( <--. ) = Bits.( <--. )
 
-(* Load the 135x135 grid from a file into a flat list of 0/1 (row-major). *)
-let load_grid filename =
-  let lines =
-    In_channel.read_lines filename
-    |> List.filter ~f:(fun s -> not (String.is_empty (String.strip s)))
-  in
-  let r = List.length lines in
-  let c = String.length (List.hd_exn lines) in
-  if r <> Day4.rows || c <> Day4.cols then
-    failwithf "Expected %dx%d grid, got %dx%d" Day4.rows Day4.cols r c ();
-
-  let bits =
-    lines
-    |> List.concat_map ~f:(fun line ->
-      String.to_list line
-      |> List.map ~f:(function
-        | '@' -> 1
-        | '.' -> 0
-        | ch -> failwithf "Unexpected char '%c' in input" ch ()))
-  in
-  if List.length bits <> Day4.cells then
-    failwithf "Bad input length: expected %d, got %d" Day4.cells (List.length bits) ();
-  bits
+let read_input_135 filename : string list =
+  In_channel.read_lines filename
+  |> List.filter ~f:(fun s -> not (String.is_empty (String.strip s)))
 ;;
 
-let simple_testbench ~(grid_bits:int list) (sim : Harness.Sim.t) =
+let build_extended_rows (rows_135 : string list) : string array =
+  if List.length rows_135 <> 135 then failwith "Expected 135 lines";
+
+  List.iter rows_135 ~f:(fun line ->
+    if String.length line <> 135 then failwith "Expected 135 columns per line");
+
+  let ext = Array.create ~len:Day4.ext_rows (String.make Day4.ext_cols '.') in
+  for r = 0 to 134 do
+    let line = List.nth_exn rows_135 r in
+    ext.(r + 1) <- "." ^ line ^ "."
+  done;
+  ext
+;;
+
+let pack_word ~(line:string) ~(word_idx:int) : Bits.t =
+  (* lane0 is LSB, lane (lanes-1) is MSB *)
+  let bits =
+    List.init Day4.lanes ~f:(fun lane ->
+      let col = (word_idx * Day4.lanes) + lane in
+      let bit =
+        if col < String.length line && Char.(line.[col] = '@') then 1 else 0
+      in
+      Bits.of_int_trunc ~width:1 bit)
+  in
+  Bits.concat_msb (List.rev bits)
+;;
+
+let load_words filename : Bits.t array =
+  let rows_135 = read_input_135 filename in
+  let ext_rows = build_extended_rows rows_135 in
+  Array.init Day4.words_total ~f:(fun addr ->
+    let r = addr / Day4.words_per_row in
+    let w = addr mod Day4.words_per_row in
+    pack_word ~line:ext_rows.(r) ~word_idx:w)
+;;
+
+let simple_testbench ~(words:Bits.t array) (sim : Harness.Sim.t) =
   let inputs = Cyclesim.inputs sim in
   let outputs = Cyclesim.outputs sim in
-  let cycle ?n () = Cyclesim.cycle ?n sim in
+  let cycle () = Cyclesim.cycle sim in
 
-  (* Reset *)
+  (* reset *)
   inputs.clear := Bits.vdd;
   cycle ();
   inputs.clear := Bits.gnd;
   cycle ();
 
-  (* Keep controls low *)
+  (* preload packed words while in Idle *)
   inputs.start := Bits.gnd;
   inputs.finish := Bits.gnd;
-  inputs.load_we := Bits.gnd;
-  cycle ();
-
-  (* Preload grid while in Idle *)
   inputs.load_we := Bits.vdd;
-  List.iteri grid_bits ~f:(fun addr bit ->
+
+  Array.iteri words ~f:(fun addr word ->
     inputs.load_addr <--. addr;
-    inputs.load_data <--. bit;
+    inputs.load_word := word;
     cycle ()
   );
+
   inputs.load_we := Bits.gnd;
   cycle ();
 
-  (* Start *)
+  (* start *)
   inputs.start := Bits.vdd;
   cycle ();
   inputs.start := Bits.gnd;
 
-  (* Run until finished *)
+  (* run until finished *)
   while not (Bits.to_bool !(outputs.finished)) do
     cycle ()
   done;
@@ -74,12 +88,14 @@ let simple_testbench ~(grid_bits:int list) (sim : Harness.Sim.t) =
   print_s [%message (p1 : int) (p2 : int)]
 ;;
 
-(*(circuit is hardcoded to 135x135, so it needs padding). *)
-let%expect_test "AoC 2025 Day 4 (day4test.txt)" =
-  let grid_bits = load_grid "day4test.txt" in
+let%expect_test "AoC 2025 Day 4 (day4input.txt) packed" =
+  (* IMPORTANT:
+     ppx_expect runs tests in a sandbox; the file must be in test/ and referenced relative to test/.
+     You currently have test/day4input.txt, so use that. *)
+  let words = load_words "day4input.txt" in
   Harness.run_advanced
     ~waves_config:Waves_config.no_waves
     ~create:Day4.hierarchical
-    (simple_testbench ~grid_bits);
-  [%expect {| ((p1 24) (p2 24)) |}]
+    (simple_testbench ~words);
+  [%expect {| ((p1 1389) (p2 9000)) |}]
 ;;

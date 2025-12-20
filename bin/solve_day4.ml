@@ -7,31 +7,61 @@ module Harness = Cyclesim_harness.Make (Day4.I) (Day4.O)
 
 let ( <--. ) = Bits.( <--. )
 
-let load_grid filename =
-  let lines =
-    In_channel.read_lines filename
-    |> List.filter ~f:(fun s -> not (String.is_empty (String.strip s)))
-  in
-  let r = List.length lines in
-  let c = String.length (List.hd_exn lines) in
-  if r <> 135 || c <> 135 then
-    failwithf "Expected 135x135 grid, got %dx%d" r c ();
+let read_input_135 filename : string list =
+  In_channel.read_lines filename
+  |> List.filter ~f:(fun s -> not (String.is_empty (String.strip s)))
+;;
 
+let build_extended_rows (rows_135 : string list) : string array =
+  if List.length rows_135 <> 135 then failwith "Expected 135 lines";
+
+  List.iter rows_135 ~f:(fun line ->
+    if String.length line <> 135 then failwith "Expected 135 columns per line");
+
+  let ext = Array.create ~len:Day4.ext_rows (String.make Day4.ext_cols '.') in
+  (* row 0 and last already dots *)
+
+  for r = 0 to 134 do
+    let line = List.nth_exn rows_135 r in
+    (* ext row r+1 is '.' + line + '.' *)
+    ext.(r + 1) <- "." ^ line ^ "."
+  done;
+
+  ext
+;;
+
+let pack_word ~(line:string) ~(word_idx:int) : Bits.t =
+  (* lane0 is LSB, lane (lanes-1) is MSB *)
   let bits =
-    lines
-    |> List.concat_map ~f:(fun line ->
-         String.to_list line
-         |> List.map ~f:(function
-              | '@' -> 1
-              | '.' -> 0
-              | ch -> failwithf "Unexpected char '%c' in input" ch ()))
+    List.init Day4.lanes ~f:(fun lane ->
+      let col = (word_idx * Day4.lanes) + lane in
+      let bit =
+        if col < String.length line && Char.(line.[col] = '@') then 1 else 0
+      in
+      Bits.of_int_trunc ~width:1 bit)
   in
-  if List.length bits <> (135 * 135) then failwith "Bad input length after flattening";
-  bits
+  Bits.concat_msb (List.rev bits)
+;;
+
+let load_words filename : Bits.t array =
+  let rows_135 = read_input_135 filename in
+  let ext_rows = build_extended_rows rows_135 in
+
+  let words =
+    Array.init Day4.words_total ~f:(fun addr ->
+      let r = addr / Day4.words_per_row in
+      let w = addr mod Day4.words_per_row in
+      pack_word ~line:ext_rows.(r) ~word_idx:w)
+  in
+  words
 ;;
 
 let run_file filename =
-  let grid_bits = load_grid filename in
+  let t0 = Time_ns.now () in
+  let cycles = ref 0 in
+
+  let words = load_words filename in
+
   Harness.run_advanced
     ~waves_config:Waves_config.no_waves
     ~create:Day4.hierarchical
@@ -39,21 +69,9 @@ let run_file filename =
       let inputs = Cyclesim.inputs sim in
       let outputs = Cyclesim.outputs sim in
 
-      (* timing + cycle counter (count only cycles after start pulse) *)
-      let t0 = Time_ns.now () in
-      let cycles = ref 0 in
-      let counting = ref false in
-
-      let cycle ?n () =
-        match n with
-        | None ->
-            Cyclesim.cycle sim;
-            if !counting then Int.incr cycles
-        | Some k ->
-            for _ = 1 to k do
-              Cyclesim.cycle sim;
-              if !counting then Int.incr cycles
-            done
+      let cycle () =
+        incr cycles;
+        Cyclesim.cycle sim
       in
 
       (* reset *)
@@ -68,12 +86,13 @@ let run_file filename =
       inputs.load_we := Bits.gnd;
       cycle ();
 
-      (* preload grid while in Idle *)
+      (* preload packed words while in Idle *)
       inputs.load_we := Bits.vdd;
-      List.iteri grid_bits ~f:(fun addr bit ->
+      Array.iteri words ~f:(fun addr word ->
         inputs.load_addr <--. addr;
-        inputs.load_data <--. bit;
-        cycle ());
+        inputs.load_word := word;
+        cycle ()
+      );
       inputs.load_we := Bits.gnd;
       cycle ();
 
@@ -82,9 +101,6 @@ let run_file filename =
       cycle ();
       inputs.start := Bits.gnd;
 
-      (* start counting cycles after the start pulse *)
-      counting := true;
-
       (* run *)
       while not (Bits.to_bool !(outputs.finished)) do
         cycle ()
@@ -92,16 +108,19 @@ let run_file filename =
 
       let p1 = Bits.to_unsigned_int !(outputs.p1) in
       let p2 = Bits.to_unsigned_int !(outputs.p2) in
-      let dt = Time_ns.diff (Time_ns.now ()) t0 in
+
+      let t1 = Time_ns.now () in
+      let dt = Time_ns.diff t1 t0 |> Time_ns.Span.to_sec in
 
       printf "Part 1: %d\nPart 2: %d\n" p1 p2;
       printf "Cycles: %d\n" !cycles;
-      printf "Time  : %s\n" (Time_ns.Span.to_string_hum dt))
+      printf "Time  : %.3fs\n" dt
+    )
 ;;
 
 let command =
   Command.basic
-    ~summary:"Run Day4_toiletpaper cyclesim on an input file and print p1/p2 + cycles + time"
+    ~summary:"Run Day4_toiletpaper packed-word cyclesim"
     [%map_open.Command
       let file = anon ("file" %: string) in
       fun () -> run_file file]
