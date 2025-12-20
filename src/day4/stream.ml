@@ -4,9 +4,9 @@ open! Signal
 open! Always
 
 (* ============================================================================
-   Day 4 “toilet paper” — AXI-Stream style wrapper (ready/valid)
+   Day 4 — AXI-Stream style wrapper (ready/valid)
 
-   Wraps the existing packed-word core with an AXI-Stream-ish interface.
+   Wraps the existing packed-word core with an AXI-Stream style interface.
 
    S_AXIS (input):
      - s_axis_tvalid, s_axis_tready, s_axis_tdata[lanes-1:0]
@@ -32,7 +32,7 @@ module Make (P : sig
   val cols : int
 end) =
 struct
-  module Core = Day4.Make (P)
+  module Core = Engine.Make (P)
 
   let lanes = Core.lanes
   let rows = Core.rows

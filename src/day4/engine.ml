@@ -4,7 +4,7 @@ open! Signal
 open! Always
 
 (* ============================================================================
-   Day 4 “toilet paper” — packed / streaming stencil RTL (parameterised)
+   Day 4  — packed / streaming stencil RTL (parameterised)
 
    This module is a *circuit generator*. You instantiate it with:
      - lanes : packed bits per word

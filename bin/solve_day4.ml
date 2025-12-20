@@ -2,7 +2,7 @@ open! Core
 open! Hardcaml
 open! Hardcaml_test_harness
 
-module Axis_gen = Advent_of_caml.Day4_stream
+module Axis_gen = Advent_of_caml.Day4.Stream
 
 let read_grid filename : string list =
   In_channel.read_lines filename
@@ -100,7 +100,7 @@ let run_file ~(lanes : int) ~(vcd : string option) (filename : string) =
     ~waves_config:Waves_config.no_waves
     ~create:D.hierarchical
     (fun sim ->
-      (* Optional VCD output (your hardcaml uses Vcd.wrap out_channel). *)
+      (* Optional VCD output (uses Vcd.wrap out_channel). *)
       let vcd_oc = Option.map vcd ~f:Out_channel.create in
       let sim =
         match vcd_oc with
