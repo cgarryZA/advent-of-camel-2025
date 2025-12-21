@@ -63,7 +63,6 @@ let load_words
 ;;
 
 let run_file ~(lanes : int) ~(vcd : string option) (filename : string) =
-  let t0 = Time_ns.now () in
   let cycles = ref 0 in
 
   let lines = read_grid filename in
@@ -110,6 +109,7 @@ let run_file ~(lanes : int) ~(vcd : string option) (filename : string) =
 
       let inputs = Cyclesim.inputs sim in
       let outputs = Cyclesim.outputs sim in
+      let t0 = Time_ns.now() in
 
       let cycle () =
         incr cycles;
@@ -178,11 +178,10 @@ let run_file ~(lanes : int) ~(vcd : string option) (filename : string) =
       inputs.m_axis_tready := Bits.gnd;
 
       let t1 = Time_ns.now () in
-      let dt = Time_ns.diff t1 t0 |> Time_ns.Span.to_sec in
+      let dt_s = Time_ns.diff t1 t0 |> Time_ns.Span.to_sec in
 
       printf "Part 1: %d\nPart 2: %d\n" p1 p2;
-      printf "Cycles: %d\n" !cycles;
-      printf "Time  : %.3fs\n" dt;
+      Advent_of_caml.Metrics.print ~cycles:!cycles ~dt_s;
 
       if Bits.to_bool !(outputs.frame_error) then
         printf "WARNING: frame_error was asserted (protocol violation)\n%!";

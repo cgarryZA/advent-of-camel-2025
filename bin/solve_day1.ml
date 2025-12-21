@@ -79,11 +79,10 @@ let run_file ~(vcd : string option) filename =
       let p2 = Bits.to_unsigned_int !(outputs.p2) in
 
       let t1 = Time_ns.now () in
-      let dt = Time_ns.diff t1 t0 |> Time_ns.Span.to_sec in
+      let dt_s = Time_ns.diff t1 t0 |> Time_ns.Span.to_sec in
 
       printf "Part 1: %d\nPart 2: %d\n" p1 p2;
-      printf "Cycles: %d\n" !cycles;
-      printf "Time  : %.3fs\n" dt;
+      Advent_of_caml.Metrics.print ~cycles:!cycles ~dt_s;
 
       Option.iter vcd_oc ~f:Out_channel.close)
 ;;
