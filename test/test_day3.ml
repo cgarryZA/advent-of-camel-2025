@@ -29,6 +29,7 @@ let run_string (s : string) : sim_result =
 
   let t0 = Time_ns.now () in
 
+  (* sync clear *)
   inputs.clear := Bits.vdd;
   cycle ();
   inputs.clear := Bits.gnd;
@@ -57,7 +58,7 @@ let run_string (s : string) : sim_result =
    ---------------------------- *)
 
 let max_k (line : string) (k : int) : int64 =
-  (* DP like hardware: best[n] = best number from picking exactly n digits so far *)
+  (* DP: best[n] = best number formed using exactly n digits *)
   let neg1 = Int64.minus_one in
   let best = Array.create ~len:(k + 1) neg1 in
   best.(0) <- 0L;
@@ -68,9 +69,13 @@ let max_k (line : string) (k : int) : int64 =
       for n = k downto 1 do
         let prev = best.(n - 1) in
         if Int64.(prev >= 0L) then (
-          let cand = Int64.(add (mul prev 10L) d) in
-          if Int64.(cand > best.(n)) then best.(n) <- cand)
-      done));
+          let cand = Int64.((prev * 10L) + d) in
+          if Int64.(cand > best.(n)) then
+            best.(n) <- cand
+        )
+      done
+    )
+  );
 
   if Int64.(best.(k) < 0L) then 0L else best.(k)
 
@@ -78,14 +83,15 @@ let ref_solve (input : string) : int64 * int64 =
   let lines =
     input
     |> String.split_lines
-    |> List.map ~f:(fun l -> String.strip l)
+    |> List.map ~f:String.strip
     |> List.filter ~f:(fun l -> not (String.is_empty l))
   in
   let p1 = ref 0L in
   let p2 = ref 0L in
   List.iter lines ~f:(fun line ->
     p1 := Int64.(!p1 + max_k line 2);
-    p2 := Int64.(!p2 + max_k line 12));
+    p2 := Int64.(!p2 + max_k line 12)
+  );
   (!p1, !p2)
 
 let assert_eq ~ctx (got1, got2) (exp1, exp2) =
@@ -114,7 +120,7 @@ let () =
 
   assert_eq ~ctx:"sample(sim)" (sim.part1, sim.part2) exp;
 
-  (* Sample with NO trailing newline (important edge case) *)
+  (* Sample with NO trailing newline *)
   let sample_no_nl =
     String.concat_lines
       [ "987654321111111"
@@ -136,17 +142,21 @@ let () =
   let sim3 = run_string sample_crlf in
   assert_eq ~ctx:"sample(crlf)" (sim3.part1, sim3.part2) exp;
 
-  (* Property tests vs reference *)
+  (* Property tests *)
   let rng = Random.State.make [| 0xC0FFEE |] in
+
   let gen_line () =
     let len = 1 + Random.State.int rng 80 in
     String.init len ~f:(fun _ ->
-      (* digits 1..9 like the puzzle; keep it realistic *)
       Char.of_int_exn (Char.to_int '0' + (1 + Random.State.int rng 9)))
   in
+
   let gen_input ~lines ~trailing_nl ~crlf =
     let sep = if crlf then "\r\n" else "\n" in
-    let body = List.init lines ~f:(fun _ -> gen_line ()) |> String.concat ~sep in
+    let body =
+      List.init lines ~f:(fun _ -> gen_line ())
+      |> String.concat ~sep
+    in
     if trailing_nl then body ^ sep else body
   in
 
@@ -160,7 +170,8 @@ let () =
     let r1, r2 = ref_solve input in
 
     assert_eq
-      ~ctx:(sprintf "random[%d] lines=%d nl=%b crlf=%b" t lines trailing_nl crlf)
+      ~ctx:(sprintf "random[%d] lines=%d nl=%b crlf=%b"
+               t lines trailing_nl crlf)
       (simr.part1, simr.part2)
       (r1, r2)
   done;

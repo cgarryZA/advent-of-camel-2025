@@ -1,7 +1,11 @@
 _build
+_opam
+dev-tools.locks
+dune.lock
+
 *.install
 *.merlin
-_opam
+
 
 *.bc
 *.exe
