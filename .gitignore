@@ -7,3 +7,4 @@ _opam
 *.exe
 
 *input.txt
+.vscode
