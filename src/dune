@@ -1,7 +1,0 @@
-(include_subdirs qualified)
-
-(library
- (name advent_of_caml)
- (libraries core hardcaml)
- (preprocess
-  (pps ppx_hardcaml ppx_jane)))

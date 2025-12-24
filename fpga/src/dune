@@ -1,0 +1,14 @@
+(library
+ (name advent_of_caml)
+ (libraries
+  async
+  core
+  core_unix
+  hardcaml
+  hardcaml_circuits
+  hardcaml_waveterm
+  advent_of_caml_input_parser)
+ (inline_tests)
+ (preprocessor_deps constraints.lpf ../uart_wrapper.py)
+ (preprocess
+  (pps ppx_jane ppx_hardcaml ppx_embed_file)))
