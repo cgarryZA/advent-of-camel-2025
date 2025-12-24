@@ -15,7 +15,7 @@ let%expect_test "day04 end-to-end (sample)" =
   in
 
   let inputs =
-    Advent_of_caml_input_parser.Day04.parse "input4.txt"
+    Advent_of_caml_input_parser.Day04.parse "sample4.txt"
     @ [ Advent_of_caml_input_parser.Util.Uart_symbol.Rts true ]
   in
 
