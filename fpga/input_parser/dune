@@ -1,0 +1,17 @@
+(library
+ (name advent_of_caml_input_parser)
+ (libraries base64 core core_unix re)
+ (inline_tests)
+ (preprocessor_deps embedded.txt)
+ (preprocess
+  (pps ppx_jane ppx_embed_file)))
+
+(rule
+ (target embedded.txt)
+ (deps
+  %{project_root}/inputs/embed.sh
+  (glob_files %{project_root}/inputs/*.txt))
+ (action
+  (chdir
+   %{project_root}/inputs
+   (run sh -c "./embed.sh > %{target}"))))

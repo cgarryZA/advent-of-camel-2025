@@ -1,7 +1,5 @@
 _build
 _opam
-dev-tools.locks
-dune.lock
 
 *.install
 *.merlin
@@ -9,5 +7,3 @@ dune.lock
 
 *.bc
 *.exe
-
-*input.txt
