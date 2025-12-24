@@ -52,6 +52,7 @@ module Core_algo = struct
       | ReadLow
       | ReadHigh
       | Count
+      | Finalize
       | Done
     [@@deriving enumerate, sexp_of, compare ~localize]
   end
@@ -165,7 +166,7 @@ module Core_algo = struct
 
   let create (_scope : Scope.t) (i : _ I.t) : _ O.t =
     let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
-    let sm = State_machine.create (module States) spec in
+    let sm = State_machine.create (module States) spec ~enable:vdd in
 
     let low = Variable.reg spec ~width:bcd_width
     and high = Variable.reg spec ~width:bcd_width
@@ -183,11 +184,10 @@ module Core_algo = struct
     let cur_u64 = bcd_to_u64 cur.value cur_len.value in
     let cond_p1 = repeated_twice cur.value cur_len.value in
     let cond_p2 = repeated_any cur.value cur_len.value in
-
     let at_high = cur.value ==: high.value in
 
     compile
-      [ (* Sticky RTS *)
+      [ (* Sticky RTS (do NOT try to use it combinationally in the same cycle) *)
         when_ i.rts [ rts_seen <-- vdd ]
 
       ; sm.switch
@@ -227,8 +227,7 @@ module Core_algo = struct
                   ; cur_len <-- low_len.value
                   ; sm.set_next Count
                   ]
-              ; (* If RTS arrives mid-ReadHigh, treat it like end-of-stream too *)
-                when_ i.rts
+              ; when_ i.rts
                   [ cur <-- low.value
                   ; cur_len <-- low_len.value
                   ; sm.set_next Count
@@ -236,13 +235,17 @@ module Core_algo = struct
               ] )
 
           ; ( Count
-            , [ when_ cond_p1 [ part1 <-- part1.value +: cur_u64 ]
+            , [ (* accumulate for this cur *)
+                when_ cond_p1 [ part1 <-- part1.value +: cur_u64 ]
               ; when_ cond_p2 [ part2 <-- part2.value +: cur_u64 ]
 
-              ; when_ at_high
+              ; (* decide next step *)
+                when_ at_high
                   [ if_
                       rts_seen.value
-                      [ sm.set_next Done ]
+                      [ (* IMPORTANT: go through Finalize for 1-cycle settling *)
+                        sm.set_next Finalize
+                      ]
                       [ low <-- zero_bcd
                       ; high <-- zero_bcd
                       ; low_len <-- zero len_bits
@@ -254,6 +257,11 @@ module Core_algo = struct
                   [ cur <-- bcd_increment ~enable:vdd cur.value
                   ; cur_len <-- cur_len.value
                   ]
+              ] )
+
+          ; ( Finalize
+            , [ (* one dead cycle so part1/part2 are guaranteed stable before Done *)
+                sm.set_next Done
               ] )
 
           ; ( Done
@@ -292,21 +300,28 @@ let create
       }
   in
 
-  (* Print once when finished rises *)
+  (* Edge-detect finished *)
   let fin_d = Variable.reg spec ~width:1 in
   let fin_pulse = core.finished &: ~:(fin_d.value) in
 
+  (* Latch results, then raise print_req one cycle later (so printer sees latched values). *)
   let p1_latched = Variable.reg spec ~width:64 in
   let p2_latched = Variable.reg spec ~width:64 in
-  let print_req = Variable.reg spec ~width:1 in
+  let print_req_r = Variable.reg spec ~width:1 in
+  let print_req = print_req_r.value in
 
   compile
     [ fin_d <-- core.finished
-    ; print_req <-- gnd
+
+    ; (* default: no print request *)
+      print_req_r <-- gnd
+
     ; when_ fin_pulse
-        [ p1_latched <-- core.part1
+        [ (* latch results (become visible next cycle) *)
+          p1_latched <-- core.part1
         ; p2_latched <-- core.part2
-        ; print_req <-- vdd
+        ; (* request printing (also becomes visible next cycle) *)
+          print_req_r <-- vdd
         ]
     ];
 
@@ -314,8 +329,8 @@ let create
     Print_decimal_outputs.hierarchical scope
       { clock
       ; clear
-      ; part1 = { value = uresize ~width:60 p1_latched.value; valid = print_req.value }
-      ; part2 = { value = uresize ~width:60 p2_latched.value; valid = print_req.value }
+      ; part1 = { value = uresize ~width:60 p1_latched.value; valid = print_req }
+      ; part2 = { value = uresize ~width:60 p2_latched.value; valid = print_req }
       }
   in
 
