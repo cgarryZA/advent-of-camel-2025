@@ -1,0 +1,6 @@
+{
+    "ocaml.sandbox": {
+        "kind": "dune",
+        "root": "${workspaceFolder:aoc}"
+    }
+}

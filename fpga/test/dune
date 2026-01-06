@@ -1,0 +1,13 @@
+(library
+ (name advent_of_caml_test)
+ (libraries
+  async
+  core
+  core_unix
+  hardcaml
+  hardcaml_waveterm
+  advent_of_caml
+  advent_of_caml_input_parser)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane ppx_hardcaml)))
