@@ -17,7 +17,7 @@ provided in the Advent of Code problem description. Sample inputs live in:
 
 `/inputs/sampleX.txt`
 
-where `X` is the day number.
+where `X` is the day number with no leading zeros.
 
 ```bash
 cd fpga
@@ -37,7 +37,7 @@ where to save it:
 
 `/inputs/inputX.txt`
 
-where `X` is the day number.
+where `X` is the day number with no leading zeros.
 
 ## Execution Model
 
