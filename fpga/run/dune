@@ -1,0 +1,11 @@
+(executables
+ (names
+  run_day01
+  run_day03
+  run_day04)
+ (libraries
+  core
+  hardcaml
+  advent_of_caml
+  advent_of_caml_input_parser
+  advent_of_caml_test))

@@ -1,6 +1,6 @@
 INSTALL_ARGS := $(if $(PREFIX),--prefix $(PREFIX),)
 
-DAY ?= 1
+DAYS := 01 03 04
 
 default:
 	dune build
@@ -16,7 +16,13 @@ reinstall: uninstall install
 clean:
 	dune clean
 
-solve:
-	dune exec ./bin/solve_day$(DAY).exe -- inputs/day$(DAY)/input.txt
+run-all:
+	@for d in $(DAYS); do \
+	  echo "=== Day $$d ==="; \
+	  dune exec run/run_day$$d.exe; \
+	done
+
+run-%:
+	dune exec run/run_day$*.exe
 
 .PHONY: default install uninstall reinstall clean
