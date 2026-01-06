@@ -33,6 +33,7 @@ must be downloaded manually. If you attempt to run a day without its input
 present, the runner will print the correct download link and tell you exactly
 where to save it:
 
+`https://adventofcode.com/2025/day/X/input`
 `/inputs/inputX.txt`
 
 where `X` is the day number.
