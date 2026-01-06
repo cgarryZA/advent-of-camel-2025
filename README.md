@@ -5,6 +5,38 @@ This project is based on the [Jane Street Hardcaml Template Project](https://git
 
 I've started with AoC days that had solutions that seemed like they would map well to hardware implementations and will see how many I can finish before the deadline.
 
+## Using the repo
+
+```bash
+cd fpga
+dune runtest
+```
+
+This runs the testbench for each implemented day against the sample input
+provided in the Advent of Code problem description. Sample inputs live in:
+
+`/inputs/sampleX.txt`
+
+where `X` is the day number.
+
+```bash
+cd fpga
+make run-all
+make run-01
+```
+
+These commands run all days (or a single day) against the full input from the
+Advent of Code website.
+
+The AoC rules ban redistribution of input files, so they are `.gitignore`d and
+must be downloaded manually. If you attempt to run a day without its input
+present, the runner will print the correct download link and tell you exactly
+where to save it:
+
+`/inputs/inputX.txt`
+
+where `X` is the day number.
+
 ## Execution Model
 
 All designs process their inputs as UART streams and produce their outputs over UART. Each solution follows a deterministic load–compute–report structure: input data is received and prepared for processing, the problem-specific algorithm is executed in hardware, and the final results for part 1 and part 2 are formatted as decimal values and transmitted once computation completes.

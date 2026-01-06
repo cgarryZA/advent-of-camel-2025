@@ -28,7 +28,15 @@ let input_files =
   |> Map.of_alist_exn (module String)
 ;;
 
-let get_input_file filename = Map.find_exn input_files filename
+let get_input_file filename =
+  match Map.find input_files filename with
+  | Some s -> s
+  | None ->
+      if Stdlib.Sys.file_exists filename then
+        In_channel.read_all filename
+      else
+        failwithf "Input file not found: %s" filename ()
+;;
 
 let all_ints_unsigned s =
   let re = Re.Perl.compile_pat "\\d+" in
