@@ -26,10 +26,10 @@ let core (_scope : Scope.t) ~(clock : Signal.t) ~(clear : Signal.t)
 
   (* We will assert done one cycle AFTER we apply the final commit, so the printer
      sees the updated sums. *)
-  let done_out     = reg spec done_pending.value in
   let done_pending = Variable.reg ~width:1 spec in
 
   let in_ready = vdd in
+  let done_out = reg spec done_pending.value in
   let fire     = uart_rx.valid &: in_ready in
 
   let byte  = uart_rx.value in
