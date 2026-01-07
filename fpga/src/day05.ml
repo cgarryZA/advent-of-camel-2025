@@ -5,17 +5,17 @@ open! Hardcaml
 open! Signal
 open! Hardcaml.Always
 
-let clock_freq = Ulx3s.Clock_freq.Clock_25mhz
-let uart_fifo_depth = 64
+let clock_freq       = Ulx3s.Clock_freq.Clock_25mhz
+let uart_fifo_depth  = 64
 let extra_synth_args = []
 
 (* ====================== RAM ====================== *)
 
 module Ram = Loadable_pseudo_dual_port_ram.Make (struct
-  let width = 64
-  let depth = 16384
+  let width           = 64
+  let depth           = 16384
+  let num_ports       = 2
   let zero_on_startup = false
-  let num_ports = 2
 end)
 
 (* ====================== LOADER ====================== *)
@@ -31,9 +31,9 @@ end)
 module Loader = struct
   module I = struct
     type 'a t =
-      { clock : 'a
-      ; clear : 'a
-      ; uart_rx : 'a Uart.Byte_with_valid.t
+      { clock    : 'a
+      ; clear    : 'a
+      ; uart_rx  : 'a Uart.Byte_with_valid.t
       ; uart_rts : 'a
       }
     [@@deriving hardcaml]
@@ -42,9 +42,9 @@ module Loader = struct
   module O = struct
     type 'a t =
       { load_finished : 'a
-      ; ram_write : 'a Ram.Port.t
-      ; data_length : 'a [@bits 13]  (* range_count *)
-      ; item_count : 'a [@bits 13]
+      ; ram_write     : 'a Ram.Port.t
+      ; data_length   : 'a [@bits 13]
+      ; item_count    : 'a [@bits 13]
       ; uart_rx_ready : 'a
       }
     [@@deriving hardcaml]
@@ -61,34 +61,42 @@ module Loader = struct
       reg_fb spec ~width:14 ~enable:word_in.valid ~f:(fun x -> x +:. 1)
     in
 
-    let loaded = Variable.reg spec ~width:1 in
+    let loaded      = Variable.reg spec ~width:1 in
     let range_count = Variable.reg spec ~width:13 in
-    let item_count = Variable.reg spec ~width:13 in
+    let item_count  = Variable.reg spec ~width:13 in
 
+    let header_word = select word_in.value ~high:12 ~low:0 in
+
+    let header_valid = word_in.valid &: (word_count <:. 2) in
+    
     compile
-      [ (* capture header words *)
-        when_ (word_in.valid &: (word_count ==:. 0))
-          [ range_count <-- select word_in.value ~high:12 ~low:0 ]
-      ; when_ (word_in.valid &: (word_count ==:. 1))
-          [ item_count <-- select word_in.value ~high:12 ~low:0 ]
-      ; when_ uart_rts [ loaded <-- vdd ]
+      [ when_ 
+          (header_valid)
+            [ if_ 
+                (word_count ==:. 0)
+                  [ range_count <-- header_word ]
+                  [ item_count <-- header_word ]
+            ]
+      ; when_ 
+          (uart_rts) 
+            [ loaded <-- vdd ]
       ]
     ;
 
     (* write payload only (skip header words 0 and 1) *)
-    let ge2 = word_count >=: of_int_trunc ~width:14 2 in
-    let wr_en = word_in.valid &: ge2 in
+    let ge2     = word_count >=: of_int_trunc ~width:14 2 in
+    let wr_en   = word_in.valid &: ge2 in
     let wr_addr = uresize ~width:14 (word_count -:. 2) in
 
     O.
       { load_finished = loaded.value
       ; ram_write =
-          { address = wr_addr
-          ; write_data = word_in.value
+          { address      = wr_addr
+          ; write_data   = word_in.value
           ; write_enable = wr_en
           }
-      ; data_length = range_count.value
-      ; item_count = item_count.value
+      ; item_count    = item_count.value
+      ; data_length   = range_count.value
       ; uart_rx_ready = vdd
       }
   ;;
@@ -125,16 +133,16 @@ let algo
     ~(item_count : Signal.t)
   =
   let spec = Reg_spec.create ~clock ~clear () in
-  let sm = State_machine.create (module States) spec in
+  let sm   = State_machine.create (module States) spec in
 
   (* ---- merge control ---- *)
-  let rd_idx = Variable.reg spec ~width:13 in
-  let curr_lo = Variable.reg spec ~width:64 in
-  let curr_hi = Variable.reg spec ~width:64 in
+  let rd_idx       = Variable.reg spec ~width:13 in
+  let curr_lo      = Variable.reg spec ~width:64 in
+  let curr_hi      = Variable.reg spec ~width:64 in
   let merge_active = Variable.reg spec ~width:1 in
 
-  let pending_lo = Variable.reg spec ~width:64 in
-  let pending_hi = Variable.reg spec ~width:64 in
+  let pending_lo    = Variable.reg spec ~width:64 in
+  let pending_hi    = Variable.reg spec ~width:64 in
   let pending_valid = Variable.reg spec ~width:1 in
 
   (* capture-to-print regs *)
@@ -153,8 +161,8 @@ let algo
   let addr_range_hi = uresize ~width:14 (rd_idx.value @: vdd) in
 
   (* merged_base = (range_count<<1) + item_count  (ranges then items in RAM) *)
+  let item_words  = uresize ~width:14 item_count in
   let range_words = uresize ~width:14 (range_count @: gnd) in
-  let item_words = uresize ~width:14 item_count in
   let merged_base = uresize ~width:14 (range_words +: item_words) in
 
   let merged_addr_lo =
@@ -177,9 +185,11 @@ let algo
   let merged_rd_addr_lo =
     merged_base +: uresize ~width:14 (range_idx.value @: gnd)
   in
+
   let merged_rd_addr_hi =
     merged_base +: uresize ~width:14 (range_idx.value @: gnd) +:. 1
   in
+
   (* ---- item control ---- *)
   let item_idx = Variable.reg spec ~width:13 in
   let curr_item = Variable.reg spec ~width:64 in
@@ -227,11 +237,10 @@ let algo
                   [ rd_idx        <--. 0
                   ; item_idx      <--. 0
                   ; range_idx     <--. 0
+                  ; merge_counter <--. 0
                   ; done_fired    <-- gnd
                   ; merge_active  <-- gnd
                   ; pending_valid <-- gnd
-                  ; merge_counter <--. 0
-
                   ; sm.set_next Merge_read
                   ]
             ]
@@ -299,14 +308,14 @@ let algo
           )
 (*----------------------------------Test Items in merged Ranges------------------------------------------------*)
         ; ( Item_read
-          , [ sm.set_next Item_consume
-            ; range_idx <--. 0
+          , [ range_idx <--. 0
+            ; sm.set_next Item_consume
             ]
           )
 
         ; ( Item_consume
-          , [ curr_item <-- new_item
-            ; range_idx <--. 0
+          , [ range_idx <--. 0
+            ; curr_item <-- new_item
             ; sm.set_next Range_read
             ]
           )
@@ -316,10 +325,7 @@ let algo
           )
 
         ; ( Range_consume
-          , [
-              (* Default: continue scanning ranges *)
-              sm.set_next Range_read
-
+          , [ sm.set_next Range_read
             ; if_ item_in_range
                 [ part1_val <-- (part1_val.value +:. 1)
                 ; advance_item_or_done
@@ -345,17 +351,14 @@ let algo
   ;
 
   (* combinational write port (no registered delay!) *)
-  let wr_en = sm.is Flush_lo |: sm.is Flush_hi in
+  let wr_en   = sm.is Flush_lo |: sm.is Flush_hi in
+
   let wr_addr = mux2 (sm.is Flush_lo) merged_addr_lo merged_addr_hi in
   let wr_data = mux2 (sm.is Flush_lo) curr_lo.value curr_hi.value in
 
-  (* RAM read ports:
-     - port0 reads low word of current input range during merge
-     - port1 reads high word of current input range during merge *)
-
   (* Which phase is driving the RAM *)
+  let iteming  = sm.is Item_read  |: sm.is Item_consume  in
   let querying = sm.is Range_read |: sm.is Range_consume in
-  let iteming  = sm.is Item_read |: sm.is Item_consume in
 
   let port0_addr =
     mux2 querying
@@ -369,10 +372,9 @@ let algo
       addr_range_hi
   in
 
-
   let ram_write_back : Signal.t Ram.Port.t =
-    { address = wr_addr
-    ; write_data = wr_data
+    { address      = wr_addr
+    ; write_data   = wr_data
     ; write_enable = wr_en
     }
   in
@@ -394,7 +396,7 @@ let create
     Ram.hierarchical ~name:"ram" scope
       { clock
       ; clear
-      ; load_ports = [| loader.ram_write; Ram.Port.unused |]
+      ; load_ports    = [| loader.ram_write; Ram.Port.unused |]
       ; load_finished = loader.load_finished
       ; ram_ports
       }
@@ -413,15 +415,15 @@ let create
   let port0_addr = mux2 ram_wb.write_enable ram_wb.address addr0 in
 
   Ram.Port.Of_signal.assign ram_ports.(0)
-    ({ address = port0_addr
-     ; write_data = ram_wb.write_data
+    ({ address      = port0_addr
+     ; write_data   = ram_wb.write_data
      ; write_enable = ram_wb.write_enable
      } : Signal.t Ram.Port.t)
   ;
 
   Ram.Port.Of_signal.assign ram_ports.(1)
-    ({ address = addr1
-     ; write_data = zero 64
+    ({ address      = addr1
+     ; write_data   = zero 64
      ; write_enable = gnd
      } : Signal.t Ram.Port.t)
   ;
@@ -436,8 +438,8 @@ let create
   in
 
   { Ulx3s.O.
-    leds = concat_lsb [ ~:clear; uart_rx_overflow; loader.load_finished; zero 5 ]
-  ; uart_tx = byte_out
+    leds          = concat_lsb [ ~:clear; uart_rx_overflow; loader.load_finished; zero 5 ]
+  ; uart_tx       = byte_out
   ; uart_rx_ready = loader.uart_rx_ready
   }
 ;;
