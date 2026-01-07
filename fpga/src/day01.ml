@@ -114,9 +114,7 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished ~data_length
   let spec = Reg_spec.create ~clock ~clear () in
   let sm = State_machine.create (module States) spec in
 
-  (* With this RAM wrapper, read_data is already "BRAM-like": address presented, data valid next cycle.
-     So:
-       - fetch_idx drives addresses (instruction to be available next cycle)
+  (*   - fetch_idx drives addresses (instruction to be available next cycle)
        - consume_idx counts which instruction we're consuming this cycle
        - primed=0 for the first cycle of Running (no valid instruction yet) *)
   let fetch_idx = Variable.reg spec ~width:13 in
@@ -134,7 +132,6 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished ~data_length
   let addr_dir = (fetch_idx.value @: gnd) |> uresize ~width:14 in
   let addr_steps = (fetch_idx.value @: vdd) |> uresize ~width:14 in
 
-  (* IMPORTANT: use RAM outputs directly (do NOT register them again). *)
   let dir_word = read_data.(0) in
   let steps_word = read_data.(1) in
 
@@ -179,7 +176,7 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished ~data_length
        if steps < first -> 0
        else 1 + floor((steps - first) / 100)
 
-     This includes the endpoint when it lands on 0, so do NOT add ends_at_zero separately.
+     This includes the endpoint when it lands on 0.
   *)
   let val32 = uresize ~width:32 value.value in
 
