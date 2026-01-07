@@ -5,17 +5,17 @@ open! Hardcaml
 open! Signal
 open! Hardcaml.Always
 
-let clock_freq = Ulx3s.Clock_freq.Clock_25mhz
-let uart_fifo_depth = 32
+let clock_freq       = Ulx3s.Clock_freq.Clock_25mhz
+let uart_fifo_depth  = 32
 let extra_synth_args = []
 
 (* ====================== RAM ====================== *)
 
 module Ram = Loadable_pseudo_dual_port_ram.Make (struct
-  let width = 32
-  let depth = 16384
+  let width           = 32
+  let depth           = 16384
+  let num_ports       = 2
   let zero_on_startup = false
-  let num_ports = 2
 end)
 
 (* ====================== LOADER ====================== *)
@@ -23,9 +23,9 @@ end)
 module Loader = struct
   module I = struct
     type 'a t =
-      { clock : 'a
-      ; clear : 'a
-      ; uart_rx : 'a Uart.Byte_with_valid.t
+      { clock    : 'a
+      ; clear    : 'a
+      ; uart_rx  : 'a Uart.Byte_with_valid.t
       ; uart_rts : 'a
       }
     [@@deriving hardcaml]
@@ -34,8 +34,8 @@ module Loader = struct
   module O = struct
     type 'a t =
       { load_finished : 'a
-      ; ram_write : 'a Ram.Port.t
-      ; data_length : 'a [@bits 13]
+      ; ram_write     : 'a Ram.Port.t
+      ; data_length   : 'a [@bits 13]
       ; uart_rx_ready : 'a
       }
     [@@deriving hardcaml]
@@ -64,7 +64,7 @@ module Loader = struct
 
     compile
       [ when_ uart_rts
-          [ loaded <-- vdd
+          [ loaded    <-- vdd
           ; instr_len <-- select word_count_written ~high:13 ~low:1
           ]
       ];
@@ -72,11 +72,11 @@ module Loader = struct
     O.
       { load_finished = loaded.value
       ; ram_write =
-          { address = word_count
-          ; write_data = word_in.value
+          { address      = word_count
+          ; write_data   = word_in.value
           ; write_enable = word_in.valid
           }
-      ; data_length = instr_len.value
+      ; data_length   = instr_len.value
       ; uart_rx_ready = vdd
       }
   ;;
@@ -93,9 +93,9 @@ let dial_bits = 7
 let count_bits = 32
 
 let div100_u32 x =
-  let x = uresize ~width:32 x in
+  let x     = uresize ~width:32 x in
   let magic = of_int_trunc ~width:32 0x51EB851F in
-  let prod = x *: magic in
+  let prod  = x *: magic in
   select prod ~high:63 ~low:37 |> uresize ~width:32
 ;;
 
@@ -114,36 +114,33 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished ~data_length
   let spec = Reg_spec.create ~clock ~clear () in
   let sm = State_machine.create (module States) spec in
 
-  (* With this RAM wrapper, read_data is already "BRAM-like": address presented, data valid next cycle.
-     So:
-       - fetch_idx drives addresses (instruction to be available next cycle)
+  (*   - fetch_idx drives addresses (instruction to be available next cycle)
        - consume_idx counts which instruction we're consuming this cycle
        - primed=0 for the first cycle of Running (no valid instruction yet) *)
-  let fetch_idx = Variable.reg spec ~width:13 in
+  let fetch_idx   = Variable.reg spec ~width:13 in
   let consume_idx = Variable.reg spec ~width:13 in
-  let primed = Variable.reg spec ~width:1 in
+  let primed      = Variable.reg spec ~width:1 in
 
   let value = Variable.reg spec ~width:dial_bits in
-  let p1 = Variable.reg spec ~width:count_bits in
-  let p2 = Variable.reg spec ~width:count_bits in
+  let p1    = Variable.reg spec ~width:count_bits in
+  let p2    = Variable.reg spec ~width:count_bits in
 
   (* Delay done by 1 cycle to let the last update settle. *)
   let done_pending = Variable.reg spec ~width:1 in
-  let done_out = reg spec done_pending.value in
+  let done_out     = reg spec done_pending.value in
 
-  let addr_dir = (fetch_idx.value @: gnd) |> uresize ~width:14 in
+  let addr_dir   = (fetch_idx.value @: gnd) |> uresize ~width:14 in
   let addr_steps = (fetch_idx.value @: vdd) |> uresize ~width:14 in
 
-  (* IMPORTANT: use RAM outputs directly (do NOT register them again). *)
-  let dir_word = read_data.(0) in
+  let dir_word   = read_data.(0) in
   let steps_word = read_data.(1) in
 
   (* 0=Left(dec), 1=Right(inc) *)
   let direction = lsb dir_word in
-  let steps = steps_word in
+  let steps     = steps_word in
 
   (* final value only depends on steps mod 100 *)
-  let delta = mod100_u32_to7 steps in
+  let delta  = mod100_u32_to7 steps in
   let value9 = uresize ~width:9 value.value in
   let delta9 = uresize ~width:9 delta in
 
@@ -179,7 +176,7 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished ~data_length
        if steps < first -> 0
        else 1 + floor((steps - first) / 100)
 
-     This includes the endpoint when it lands on 0, so do NOT add ends_at_zero separately.
+     This includes the endpoint when it lands on 0.
   *)
   let val32 = uresize ~width:32 value.value in
 
@@ -202,43 +199,41 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished ~data_length
       (zero 32)
   in
 
-  let last_fetch = fetch_idx.value ==: (data_length -:. 1) in
+  let last_fetch   = fetch_idx.value   ==: (data_length -:. 1) in
   let last_consume = consume_idx.value ==: (data_length -:. 1) in
 
   compile
     [ sm.switch
         [ ( Loading
           , [ when_ load_finished
-                [ fetch_idx <--. 0
-                ; consume_idx <--. 0
-                ; primed <-- gnd
-                ; value <-- of_int_trunc ~width:dial_bits 50
-                ; p1 <-- zero count_bits
-                ; p2 <-- zero count_bits
+                [ fetch_idx    <--. 0
+                ; consume_idx  <--. 0
+                ; primed       <-- gnd
                 ; done_pending <-- gnd
+                ; p1           <-- zero count_bits
+                ; p2           <-- zero count_bits
+                ; value        <-- of_int_trunc ~width:dial_bits 50
                 ; sm.set_next Running
                 ]
             ] )
         ; ( Running
-          , [ (* Always advance fetch pointer until we've presented the last instruction address. *)
-              when_ (~:last_fetch) [ fetch_idx <-- fetch_idx.value +:. 1 ]
-
+          , [ when_ 
+                (~:last_fetch) 
+                  [ fetch_idx <-- fetch_idx.value +:. 1 ]
             ; if_
                 (primed.value ==:. 0)
-                [ (* First cycle in Running: we have only just presented instr0 address.
-                     Data becomes valid next cycle. *)
-                  primed <-- vdd
-                ]
-                [ (* Consume one instruction per cycle, using read_data (which is valid now). *)
-                  value <-- next_value
-                ; when_ ends_at_zero [ p1 <-- p1.value +:. 1 ]
-                ; p2 <-- p2.value +: hits
-
-                ; if_ last_consume
-                    [ done_pending <-- vdd
-                    ; sm.set_next Done
-                    ]
-                    [ consume_idx <-- consume_idx.value +:. 1 ]
+                [ primed <-- vdd ]
+                [ value  <-- next_value
+                ; p2     <-- p2.value +: hits
+                ; when_ 
+                  (ends_at_zero)
+                    [ p1 <-- p1.value +:. 1 ]
+                ; if_ 
+                    (last_consume)
+                      [ done_pending <-- vdd
+                      ; sm.set_next Done
+                      ]
+                      [ consume_idx <-- consume_idx.value +:. 1 ]
                 ]
             ] )
         ; Done, [ done_pending <-- vdd ]
@@ -258,8 +253,8 @@ let create
     Loader.hierarchical scope { clock; clear; uart_rx; uart_rts }
   in
   let load_finished = loader_out.load_finished in
-  let ram_write = loader_out.ram_write in
-  let data_length = loader_out.data_length in
+  let ram_write     = loader_out.ram_write in
+  let data_length   = loader_out.data_length in
   let uart_rx_ready = loader_out.uart_rx_ready in
 
   let ram_ports = Array.init 2 ~f:(fun _ -> Ram.Port.Of_signal.wires ()) in
@@ -280,14 +275,14 @@ let create
   in
 
   Ram.Port.Of_signal.assign ram_ports.(0)
-    { address = mux2 load_finished addr0 (zero 14)
-    ; write_data = zero 32
+    { address      = mux2 load_finished addr0 (zero 14)
+    ; write_data   = zero 32
     ; write_enable = gnd
     };
 
   Ram.Port.Of_signal.assign ram_ports.(1)
-    { address = mux2 load_finished addr1 (zero 14)
-    ; write_data = zero 32
+    { address      = mux2 load_finished addr1 (zero 14)
+    ; write_data   = zero 32
     ; write_enable = gnd
     };
 

@@ -2,7 +2,9 @@
  (names
   run_day01
   run_day03
-  run_day04)
+  run_day04
+  run_day05
+  )
  (libraries
   core
   hardcaml

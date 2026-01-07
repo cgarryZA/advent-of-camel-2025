@@ -5,8 +5,8 @@ open! Hardcaml
 open! Signal
 open! Hardcaml.Always
 
-let clock_freq = Ulx3s.Clock_freq.Clock_25mhz
-let uart_fifo_depth = 32
+let clock_freq       = Ulx3s.Clock_freq.Clock_25mhz
+let uart_fifo_depth  = 32
 let extra_synth_args = []
 
 (* ====================== STREAMING CORE ====================== *)
@@ -27,12 +27,12 @@ let core (_scope : Scope.t) ~(clock : Signal.t) ~(clear : Signal.t)
   (* We will assert done one cycle AFTER we apply the final commit, so the printer
      sees the updated sums. *)
   let done_pending = Variable.reg ~width:1 spec in
-  let done_out = reg spec done_pending.value in
 
   let in_ready = vdd in
-  let fire = uart_rx.valid &: in_ready in
+  let done_out = reg spec done_pending.value in
+  let fire     = uart_rx.valid &: in_ready in
 
-  let byte = uart_rx.value in
+  let byte  = uart_rx.value in
   let is_lf = fire &: (byte ==:. Char.to_int '\n') in
   let is_cr = fire &: (byte ==:. Char.to_int '\r') in
 
@@ -64,12 +64,12 @@ let core (_scope : Scope.t) ~(clock : Signal.t) ~(clear : Signal.t)
 
   (* Boundary is newline OR RTS (end-of-stream). In your harness RTS is a separate
      symbol/cycle, so don't AND it with fire. *)
-  let boundary = is_lf |: uart_rts in
+  let boundary        = is_lf |: uart_rts in
   let will_have_digit = have_digit.value |: is_digit in
 
   (* Values to commit on a boundary: if this cycle is a digit too, use best_after_digit;
      otherwise use the stored best. *)
-  let b2_commit = mux2 is_digit best_after_digit.(2) best.(2).value in
+  let b2_commit  = mux2 is_digit best_after_digit.(2) best.(2).value in
   let b12_commit = mux2 is_digit best_after_digit.(12) best.(12).value in
 
   let clear_best_stmts =
@@ -132,8 +132,8 @@ let create
   in
 
   { Ulx3s.O.
-    leds = concat_lsb [ ~:clear; uart_rx_overflow; done_; zero 5 ]
-  ; uart_tx = byte_out
+    leds          = concat_lsb [ ~:clear; uart_rx_overflow; done_; zero 5 ]
+  ; uart_tx       = byte_out
   ; uart_rx_ready = vdd
   }
 ;;
