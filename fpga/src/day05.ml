@@ -193,29 +193,49 @@ let algo
   let new_item = read_data.(0) in
 
   (* ---- query predicates (combinational) ---- *)
-  let q_item_lt_lo  = curr_item.value <: new_lo in
-  let q_item_in_rng =
-    (curr_item.value >=: new_lo) &: (curr_item.value <=: new_hi)
+  let item_before_range =
+    curr_item.value <: new_lo
   in
-  let q_last_range  = range_idx.value ==: (merge_counter.value -:. 1) in
-  let q_last_item   = item_idx.value ==: (item_count -:. 1) in
+
+  let item_in_range =
+    (curr_item.value >=: new_lo) &: 
+    (curr_item.value <=: new_hi)
+  in
+
+  let last_merged_range =
+    range_idx.value ==: (merge_counter.value -:. 1)
+  in
+
+  let last_item =
+    item_idx.value ==: (item_count -:. 1)
+  in
+
+  let advance_item_or_done =
+    if_ last_item
+      [ sm.set_next Done ]
+      [ item_idx <-- (item_idx.value +:. 1)
+
+      ; sm.set_next Item_read
+      ]
+  in
 
   compile
     [ sm.switch
         [ ( Loading
-          , [ when_ (load_finished ==:. 1)
-                [ rd_idx <--. 0
-                ; item_idx <--. 0
-                ; range_idx <--. 0
-                ; merge_active <-- gnd
-                ; pending_valid <-- gnd
-                ; merge_counter <--. 0
-                ; done_fired <-- gnd
-                ; sm.set_next Merge_read
-                ]
+          , [ when_ 
+                (load_finished ==:. 1)
+                  [ rd_idx        <--. 0
+                  ; item_idx      <--. 0
+                  ; range_idx     <--. 0
+                  ; done_fired    <-- gnd
+                  ; merge_active  <-- gnd
+                  ; pending_valid <-- gnd
+                  ; merge_counter <--. 0
+
+                  ; sm.set_next Merge_read
+                  ]
             ]
           )
-
         ; ( Merge_read
           , [ (* present addresses for rd_idx; data valid next cycle *)
               sm.set_next Merge_consume
@@ -223,31 +243,30 @@ let algo
           )
 
         ; ( Merge_consume
-          , [ (* default: read the next range *)
-              sm.set_next Merge_read
-
-            ; (* consume range (rd_idx) that was addressed in previous cycle *)
-              if_ (merge_active.value ==:. 0)
-                [ curr_lo <-- new_lo
-                ; curr_hi <-- new_hi
-                ; merge_active <-- vdd
-                ]
-                [ if_ overlap
-                    [ curr_hi <-- merged_hi ]
-                    [ (* non-overlap: stash next range and flush curr *)
-                      pending_lo <-- new_lo
-                    ; pending_hi <-- new_hi
-                    ; pending_valid <-- vdd
-                    ; sm.set_next Flush_lo
-                    ]
-                ]
-
+          , [ sm.set_next Merge_read
+            ; if_ 
+                (merge_active.value ==:. 0)
+                  [ curr_lo <-- new_lo
+                  ; curr_hi <-- new_hi
+                  ; merge_active <-- vdd
+                  ]
+                  [ if_ 
+                    (overlap)
+                      [ curr_hi <-- merged_hi ]
+                      [ (* non-overlap: stash next range and flush curr *)
+                        pending_lo <-- new_lo
+                      ; pending_hi <-- new_hi
+                      ; pending_valid <-- vdd
+                      ; sm.set_next Flush_lo
+                      ]
+                  ]
             ; (* advance rd_idx past the range we just consumed *)
               rd_idx <-- (rd_idx.value +:. 1)
 
             ; (* if we just consumed the last input range, flush final curr *)
-              when_ (rd_idx.value ==: (range_count -:. 1))
-                [ sm.set_next Flush_lo ]
+              when_ 
+                (rd_idx.value ==: (range_count -:. 1))
+                  [ sm.set_next Flush_lo ]
             ]
           )
 
@@ -256,30 +275,29 @@ let algo
               sm.set_next Flush_hi
             ]
           )
-
         ; ( Flush_hi
           , [ (* write curr_hi this cycle via combinational write port *)
             merge_counter <-- (merge_counter.value +:. 1)
-          ; part2_val <-- (part2_val.value +: (curr_hi.value -: curr_lo.value +:. 1))
-            ; (* after flushing curr: either continue with pending, continue reading, or finish *)
-              if_ (pending_valid.value ==:. 1)
-                [ curr_lo <-- pending_lo.value
-                ; curr_hi <-- pending_hi.value
+          ; part2_val     <-- (part2_val.value +: (curr_hi.value -: curr_lo.value +:. 1))
+
+          ; if_ 
+              (pending_valid.value ==:. 1)
+                [ curr_lo       <-- pending_lo.value
+                ; curr_hi       <-- pending_hi.value
                 ; pending_valid <-- gnd
+
                 ; if_ (rd_idx.value <: range_count)
                     [ sm.set_next Merge_read ]
-                    [ (* no more input; flush the pending-as-curr then finish *)
-                      sm.set_next Flush_lo
-                    ]
+                    [ sm.set_next Flush_lo   ]
                 ]
                 [ (* no pending *)
                   if_ (rd_idx.value <: range_count)
                     [ sm.set_next Merge_read ]
-                    [ sm.set_next Item_read ]
+                    [ sm.set_next Item_read  ]
                 ]
             ]
           )
-(*-------------------------------------------QUERY SECTION------------------------------------------------*)
+(*----------------------------------Test Items in merged Ranges------------------------------------------------*)
         ; ( Item_read
           , [ sm.set_next Item_consume
             ; range_idx <--. 0
@@ -298,38 +316,27 @@ let algo
           )
 
         ; ( Range_consume
-          , [ (* default: keep scanning ranges *)
+          , [
+              (* Default: continue scanning ranges *)
               sm.set_next Range_read
 
-            ; if_ q_item_in_rng
+            ; if_ item_in_range
                 [ part1_val <-- (part1_val.value +:. 1)
-                ; if_ q_last_item
-                    [ sm.set_next Done ]
-                    [ item_idx <-- (item_idx.value +:. 1)
-                    ; sm.set_next Item_read
-                    ]
+                ; advance_item_or_done
                 ]
-                [ if_ q_item_lt_lo
-                    [ (* item < lo => can’t be in any later range *)
-                      if_ q_last_item
-                        [ sm.set_next Done ]
-                        [ item_idx <-- (item_idx.value +:. 1)
-                        ; sm.set_next Item_read
-                        ]
+                [ if_ item_before_range
+                    [ (* Item < lo ⇒ cannot appear in any later merged range *)
+                      advance_item_or_done
                     ]
-                    [ (* item > hi => advance range if possible, else miss *)
-                      if_ q_last_range
-                        [ if_ q_last_item
-                            [ sm.set_next Done ]
-                            [ item_idx <-- (item_idx.value +:. 1)
-                            ; sm.set_next Item_read
-                            ]
-                        ]
+                    [ (* Item > hi *)
+                      if_ last_merged_range
+                        [ advance_item_or_done ]
                         [ range_idx <-- (range_idx.value +:. 1) ]
                     ]
                 ]
             ]
           )
+
         ; ( Done
           , [ when_ (done_fired.value ==:. 0) [ done_fired <-- vdd ] ]
           )
