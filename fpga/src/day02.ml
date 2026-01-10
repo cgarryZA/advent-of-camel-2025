@@ -99,16 +99,18 @@ module States = struct
     | Hi_lo_consume
     | Hi_hi_read
     | Hi_hi_consume
-    | Count_check
-    | Dec_init
-    | Dec_div
-    | Check
-    | Count_step
+
+    (* one-time per-range init: lo(binary) -> cur_bcd *)
+    | Bcd_div
+
+    (* 1 cycle per ID *)
+    | Iterate
+
     | Done
   [@@deriving enumerate, sexp_of, compare ~localize]
 end
 
-(* ====================== DECIMAL HELPERS ====================== *)
+(* ====================== BCD / DIGIT HELPERS ====================== *)
 
 let max_digits  = 20
 let digits_bits = max_digits * 4
@@ -123,6 +125,7 @@ let div10_u64 (x : Signal.t) =
   q, uresize ~width:4 r
 ;;
 
+(* Place digit at nibble idx (0 = least significant digit nibble) *)
 let place_digit_ls ~(idx : Signal.t) ~(digit4 : Signal.t) =
   let mk k =
     if k < max_digits then
@@ -140,28 +143,89 @@ let place_digit_ls ~(idx : Signal.t) ~(digit4 : Signal.t) =
   mux idx (List.init 32 ~f:mk)
 ;;
 
-let repeats_check ~(digits : Signal.t) ~(len : Signal.t) ~(s : int) =
-  let ok_len = len >=:. (2*s) in
-  let all =
-    List.init max_digits ~f:(fun i ->
-      let in_range = len >:. i in
-      let d0 =
-        select digits ~high:(4*((i mod s)+1)-1) ~low:(4*(i mod s))
+(* Increment a BCD value stored little-endian in nibbles (LS digit at nibble 0). *)
+let bcd_incr (x : Signal.t) : Signal.t =
+  assert (width x % 4 = 0);
+  let rec go ~carry = function
+    | [] -> []
+    | d :: ds ->
+      let is9 = d ==:. 9 in
+      let next_d =
+        mux2 carry (mux2 is9 (zero 4) (d +:. 1)) d
       in
-      let di =
-        select digits ~high:(4*(i+1)-1) ~low:(4*i)
-      in
-      (~:in_range) |: (d0 ==: di))
-    |> List.fold ~init:vdd ~f:( &: )
+      let carry = carry &: is9 in
+      next_d :: go ds ~carry
   in
-  ok_len &: all
+  x |> split_lsb ~exact:true ~part_width:4 |> go ~carry:vdd |> concat_lsb
 ;;
 
-(* ====================== ALGORITHM ====================== *)
+(* "x has exactly n digits (no leading zeros)" for little-endian BCD. *)
+let bcd_is_length ~(n : int) (x : Signal.t) : Signal.t =
+  if n <= 0 || n > max_digits then gnd
+  else
+    let msd =
+      select x ~high:(4*n - 1) ~low:(4*(n-1))
+    in
+    let upper_ok =
+      if digits_bits = 4*n then vdd
+      else
+        let hi = select x ~high:(digits_bits - 1) ~low:(4*n) in
+        hi ==:. 0
+    in
+    upper_ok &: (msd <>:. 0)
+;;
+
+let repeated_substring_check ~(digits : Signal.t) ~(len : int) ~(div : int) : Signal.t =
+  (* Preconditions handled by caller: div divides len, and len/div >= 2 *)
+  let slice = sel_bottom digits ~width:(4 * len) in
+  let chunks = split_lsb slice ~exact:true ~part_width:(4 * div) in
+  match chunks with
+  | [] | [_] -> gnd
+  | first :: rest ->
+    List.map rest ~f:(fun c -> c ==: first)
+    |> List.fold ~init:vdd ~f:( &: )
+;;
+
+let invalid_for_part1 ~(id_bcd : Signal.t) ~(id_valid : Signal.t) : Signal.t =
+  (* Part 1: exactly two repeats => length even, div = length/2, halves equal *)
+  List.init (max_digits - 1) ~f:(fun i ->
+      let len = i + 2 in
+      if len % 2 <> 0 then gnd
+      else
+        let div = len / 2 in
+        let matches_len = bcd_is_length ~n:len id_bcd in
+        id_valid &: matches_len &: repeated_substring_check ~digits:id_bcd ~len ~div
+    )
+  |> List.fold ~init:gnd ~f:( |: )
+;;
+
+let invalid_for_part2 ~(id_bcd : Signal.t) ~(id_valid : Signal.t) : Signal.t =
+  (* Part 2: repeats at least twice => any div where div|len and len/div>=2 *)
+  List.init (max_digits - 1) ~f:(fun i ->
+      let len = i + 2 in
+      let matches_len = bcd_is_length ~n:len id_bcd in
+      let any_div =
+        List.init (len - 1) ~f:(fun j ->
+            let div = j + 1 in
+            if (len % div = 0) && (len / div >= 2)
+            then repeated_substring_check ~digits:id_bcd ~len ~div
+            else gnd
+          )
+        |> List.fold ~init:gnd ~f:( |: )
+      in
+      id_valid &: matches_len &: any_div
+    )
+  |> List.fold ~init:gnd ~f:( |: )
+;;
+
+(* ====================== STREAMING-BCD ALGORITHM ====================== *)
 
 let algo ~clock ~clear ~read_word ~data_words ~load_finished =
   let spec = Reg_spec.create ~clock ~clear () in
   let sm   = State_machine.create (module States) spec in
+
+  (* global cycle counter *)
+  let cycles = Variable.reg spec ~width:64 in
 
   (* RAM address *)
   let rd_word = Variable.reg spec ~width:14 in
@@ -172,13 +236,13 @@ let algo ~clock ~clear ~read_word ~data_words ~load_finished =
   let lo    = Variable.reg spec ~width:64 in
   let hi    = Variable.reg spec ~width:64 in
 
-  (* iteration *)
-  let cur = Variable.reg spec ~width:64 in
+  (* iteration: binary for compare+sum, BCD for pattern checks *)
+  let cur_bin = Variable.reg spec ~width:64 in
+  let cur_bcd = Variable.reg spec ~width:digits_bits in
 
-  (* decimal extraction *)
-  let tmp       = Variable.reg spec ~width:64 in
-  let dec_len   = Variable.reg spec ~width:5 in
-  let digits_ls = Variable.reg spec ~width:digits_bits in
+  (* one-time conversion workspace (per range): lo (binary) -> cur_bcd *)
+  let tmp_bin = Variable.reg spec ~width:64 in
+  let bcd_idx = Variable.reg spec ~width:5 in
 
   (* outputs *)
   let part1 = Variable.reg spec ~width:64 in
@@ -188,41 +252,18 @@ let algo ~clock ~clear ~read_word ~data_words ~load_finished =
   let done_fired = Variable.reg spec ~width:1 in
   let done_pulse = sm.is Done &: ~:(done_fired.value) in
 
-  (* div/mod10 for tmp *)
-  let q, r = div10_u64 tmp.value in
-  let placed = place_digit_ls ~idx:dec_len.value ~digit4:r in
+  (* combinational invalid checks (active only in Iterate) *)
+  let id_valid = sm.is Iterate in
+  let inv1 = invalid_for_part1 ~id_bcd:cur_bcd.value ~id_valid in
+  let inv2 = invalid_for_part2 ~id_bcd:cur_bcd.value ~id_valid in
 
-  (* part1: exactly two repeats *)
-  let part1_hit =
-    List.init (max_digits / 2) ~f:(fun i ->
-      let s = i + 1 in
-      (dec_len.value ==:. (2*s))
-      &: repeats_check ~digits:digits_ls.value ~len:dec_len.value ~s)
-    |> List.fold ~init:gnd ~f:( |: )
-  in
-
-  (* part2: repeats at least twice => len is a multiple of s, and >= 2*s *)
-  let part2_hit =
-    List.init (max_digits / 2) ~f:(fun i ->
-      let s = i + 1 in
-
-      (* dec_len is a multiple of s, and >= 2*s *)
-      let mult_ok =
-        List.init 32 ~f:(fun k ->
-          if k mod s = 0 && k >= 2*s then
-            dec_len.value ==:. k
-          else
-            gnd)
-        |> List.fold ~init:gnd ~f:( |: )
-      in
-
-      repeats_check ~digits:digits_ls.value ~len:dec_len.value ~s
-      &: mult_ok)
-    |> List.fold ~init:gnd ~f:( |: )
-  in
+  (* conversion step wires *)
+  let q10, r10 = div10_u64 tmp_bin.value in
+  let placed   = place_digit_ls ~idx:bcd_idx.value ~digit4:r10 in
 
   compile
-    [ sm.switch
+    [ cycles <-- cycles.value +:. 1
+    ; sm.switch
         [ Loading,
           [ when_ load_finished
               [ rd_word    <--. 0
@@ -258,49 +299,50 @@ let algo ~clock ~clear ~read_word ~data_words ~load_finished =
         ; Hi_hi_consume,
           [ hi      <-- concat_msb [ read_word; hi_lo.value ]
           ; rd_word <-- rd_word.value +:. 1
-          ; cur     <-- lo.value
-          ; sm.set_next Count_check
+
+          (* seed iteration state *)
+          ; cur_bin <-- lo.value
+
+          (* begin one-time lo -> bcd conversion *)
+          ; tmp_bin <-- lo.value
+          ; bcd_idx <--. 0
+          ; cur_bcd <-- zero digits_bits
+
+          ; sm.set_next Bcd_div
           ]
 
-        (* ---- iterate range ---- *)
-        ; Count_check,
-          [ if_ (cur.value <=: hi.value)
-              [ sm.set_next Dec_init ]
-              [ if_ (rd_word.value +:. 3 <: data_words)
-                  [ sm.set_next Lo_lo_read ]
-                  [ sm.set_next Done ]
+        (* ---- one-time convert lo (binary) -> cur_bcd (BCD digits) ---- *)
+        ; Bcd_div,
+          [ cur_bcd <-- (cur_bcd.value |: placed)
+          ; bcd_idx <-- bcd_idx.value +:. 1
+          ; tmp_bin <-- q10
+          ; if_ (q10 ==:. 0)
+              [ sm.set_next Iterate ]
+              []
+          ]
+
+        (* ---- iterate range: 1 cycle per ID ---- *)
+        ; Iterate,
+          [ when_ inv1 [ part1 <-- part1.value +: cur_bin.value ]
+          ; when_ inv2 [ part2 <-- part2.value +: cur_bin.value ]
+
+          ; if_ (cur_bin.value ==: hi.value)
+              [ (* finished this range *)
+                if_ (rd_word.value +:. 3 <: data_words)
+                    [ sm.set_next Lo_lo_read ]
+                    [ sm.set_next Done ]
               ]
-          ]
-
-        (* ---- decimal extraction ---- *)
-        ; Dec_init,
-          [ tmp       <-- cur.value
-          ; dec_len   <--. 0
-          ; digits_ls <-- zero digits_bits
-          ; sm.set_next Dec_div
-          ]
-
-        ; Dec_div,
-          [ digits_ls <-- (digits_ls.value |: placed)
-          ; dec_len   <-- dec_len.value +:. 1
-          ; tmp       <-- q
-          ; if_ (q ==:. 0) [ sm.set_next Check ] []
-          ]
-
-        ; Check,
-          [ when_ part1_hit [ part1 <-- part1.value +: cur.value ]
-          ; when_ part2_hit [ part2 <-- part2.value +: cur.value ]
-          ; sm.set_next Count_step
-          ]
-
-        ; Count_step,
-          [ cur <-- cur.value +:. 1
-          ; sm.set_next Count_check
+              [ (* advance to next ID *)
+                cur_bin <-- cur_bin.value +:. 1
+              ; cur_bcd <-- bcd_incr cur_bcd.value
+              ]
           ]
 
         ; Done,
           [ when_ (done_fired.value ==:. 0)
-              [ done_fired <-- vdd ]
+              [ done_fired <-- vdd 
+              ; cycles <-- cycles.value
+              ]
           ]
         ]
     ]
@@ -336,6 +378,7 @@ let create
       ~load_finished:loader.load_finished
   in
 
+  (* Read port: only active after load_finished, to avoid weird early addresses *)
   Ram.Port.Of_signal.assign ram_ports.(0)
     { address      = mux2 loader.load_finished addr (zero 14)
     ; write_data   = zero 32
@@ -356,11 +399,19 @@ let create
       ; clear
       ; part1 = { value = uresize ~width:60 p1; valid = done_pulse }
       ; part2 = { value = uresize ~width:60 p2; valid = done_pulse }
+      ; extra = { value = uresize ~width:60 cycles.value; valid = done_pulse }
       }
   in
 
   { Ulx3s.O.
-    leds          = concat_lsb [ ~:clear; uart_rx_overflow; loader.load_finished; zero 5 ]
+    leds =
+      concat_lsb
+        [ ~:clear
+        ; uart_rx_overflow
+        ; loader.load_finished
+        ; done_pulse
+        ; zero 4
+        ]
   ; uart_tx       = byte_out
   ; uart_rx_ready = loader.uart_rx_ready
   }
