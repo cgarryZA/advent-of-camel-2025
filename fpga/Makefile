@@ -1,6 +1,6 @@
 INSTALL_ARGS := $(if $(PREFIX),--prefix $(PREFIX),)
 
-DAYS := 01 03 04 05
+DAYS := 01 02 03 04 05
 
 default:
 	dune build
