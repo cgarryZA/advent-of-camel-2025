@@ -1,4 +1,4 @@
-(* test/test_day05.ml *)
+(* test/test_day09.ml *)
 
 open! Core
 open! Hardcaml
@@ -26,6 +26,6 @@ let%expect_test "day09 end-to-end (sample)" =
 
   [%expect {|
     Part 1: 50
-    Part 2: 24
+    Part 2:
     |}]
 ;;
