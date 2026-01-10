@@ -6,9 +6,6 @@ open! Hardcaml
 module Ulx3s = Advent_of_caml.Ulx3s
 module Sim = Cyclesim.With_interface (Ulx3s.I) (Ulx3s.O)
 
-(* Fixed, conservative cycle budget *)
-let run_cycles = 500_000
-
 (* ---------- Colours ---------- *)
 module Color = struct
   let reset  = "\027[0m"
@@ -181,6 +178,7 @@ let run_day
         string ->
         Advent_of_caml_input_parser.Util.Uart_symbol.t list)
     ?(vcd_file : string option = None)
+    ?(run_cycles = 500_000)
     ()
   =
   let inputs =
