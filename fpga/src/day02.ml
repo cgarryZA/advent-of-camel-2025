@@ -224,9 +224,6 @@ let algo ~clock ~clear ~read_word ~data_words ~load_finished =
   let spec = Reg_spec.create ~clock ~clear () in
   let sm   = State_machine.create (module States) spec in
 
-  (* global cycle counter *)
-  let cycles = Variable.reg spec ~width:64 in
-
   (* RAM address *)
   let rd_word = Variable.reg spec ~width:14 in
 
@@ -262,8 +259,7 @@ let algo ~clock ~clear ~read_word ~data_words ~load_finished =
   let placed   = place_digit_ls ~idx:bcd_idx.value ~digit4:r10 in
 
   compile
-    [ cycles <-- cycles.value +:. 1
-    ; sm.switch
+    [ sm.switch
         [ Loading,
           [ when_ load_finished
               [ rd_word    <--. 0
@@ -340,9 +336,7 @@ let algo ~clock ~clear ~read_word ~data_words ~load_finished =
 
         ; Done,
           [ when_ (done_fired.value ==:. 0)
-              [ done_fired <-- vdd 
-              ; cycles <-- cycles.value
-              ]
+              [ done_fired <-- vdd ]
           ]
         ]
     ]
@@ -399,7 +393,6 @@ let create
       ; clear
       ; part1 = { value = uresize ~width:60 p1; valid = done_pulse }
       ; part2 = { value = uresize ~width:60 p2; valid = done_pulse }
-      ; extra = { value = uresize ~width:60 cycles.value; valid = done_pulse }
       }
   in
 
