@@ -232,7 +232,7 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
               (Array.to_list
                  (Array.mapi masks ~f:(fun i r ->
                     r <-- mux2 (mask_load_idx.value ==: of_int_trunc ~width:5 i)
-                      (r0 &: tgt_mask.value)
+                      r0
                       r.value)))
           ; if_ (mask_load_idx.value +:. 1 ==: uresize ~width:5 k_btns.value)
               [ sm.set_next Subset_init ]
