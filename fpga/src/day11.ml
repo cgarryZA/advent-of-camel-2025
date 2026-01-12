@@ -90,7 +90,6 @@ module States = struct
   type t =
     | Loading
 
-    (* Explicit header read/consume to match sync RAM timing *)
     | Header0_read
     | Header0_consume
     | Header1_read
@@ -119,8 +118,6 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
   let header_words = 2 in
   let node_base = header_words in
 
-  (* IMPORTANT: make addresses / write controls combinational wires.
-     Using regs here shifts everything by 1 cycle and breaks sync reads. *)
   let ram_addr  = Variable.wire ~default:(zero 14) () in
   let write_addr = Variable.wire ~default:(zero 14) () in
   let write_data = Variable.wire ~default:(zero 64) () in
@@ -205,6 +202,13 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
   in
   let part2_calc = term_a +: term_b in
 
+  let or_reduce (x : Signal.t) =
+    match bits_lsb x with
+    | [] -> gnd
+    | [b] -> b
+    | bs -> List.reduce_exn bs ~f:(|:)
+  in
+
   compile
     [ sm.switch
         [ ( Loading
@@ -226,7 +230,9 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
             ; idx_you   <-- select read_word ~high:27 ~low:14
             ; idx_out   <-- select read_word ~high:41 ~low:28
             ; idx_svr   <-- select read_word ~high:55 ~low:42
-            ; has_part2 <-- bit read_word ~pos:56
+
+            ; has_part2 <-- or_reduce (select read_word ~high:63 ~low:56)
+
             ; sm.set_next Header1_read
             ]
           )
@@ -240,6 +246,9 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
         ; ( Header1_consume
           , [ idx_fft <-- select read_word ~high:13 ~low:0
             ; idx_dac <-- select read_word ~high:27 ~low:14
+
+            ; has_part2 <-- (has_part2.value |: or_reduce (select read_word ~high:63 ~low:28))
+
             ; run_id  <--. 0
             ; sm.set_next Run_setup
             ]
@@ -273,8 +282,8 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
 
         ; ( Reset_read
           , [ if_ (reset_idx.value ==: num_nodes.value)
-                [ (* forward DP traversal begins at start_idx *)
-                  node_idx <-- start_idx.value
+                [ (* traverse all nodes; start node is the only one seeded to 1 *)
+                  node_idx <--. 0
                 ; sm.set_next Node_read
                 ]
                 [ ram_addr <-- uresize ~width:14 (reset_idx.value +:. node_base)
@@ -344,12 +353,12 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
           , [ write_addr <-- uresize ~width:14 (child_idx.value +:. node_base)
             ; write_data <--
                 (let sum32 =
-                  uresize ~width:32 (node_count read_word +: parent_count.value)
-                in
-                concat_msb
-                  [ sum32
-                  ; select read_word ~high:31 ~low:0
-                  ])
+                   uresize ~width:32 (node_count read_word +: parent_count.value)
+                 in
+                 concat_msb
+                   [ sum32
+                   ; select read_word ~high:31 ~low:0
+                   ])
             ; write_en <-- vdd
             ; edge_idx <-- edge_idx.value +:. 1
             ; if_ (edge_idx.value +:. 1 ==: curr_edge_count.value)
