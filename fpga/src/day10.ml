@@ -43,30 +43,32 @@ module Loader = struct
   let create _ ({ clock; clear; uart_rx; uart_rts } : _ I.t) : _ O.t =
     let spec = Reg_spec.create ~clock ~clear () in
 
-    (* Pack 8 bytes → 1x 64-bit word *)
     let word_in = Util.shift_in ~clock ~clear ~n:8 uart_rx in
 
-    (* Counts how many full 64b words have been received *)
     let word_count = Variable.reg spec ~width:14 in
     let loaded     = Variable.reg spec ~width:1 in
 
+    (* Track if a word completed this cycle *)
+    let word_written = word_in.valid in
+
     compile
-      [ when_ word_in.valid
-          [ (* increment AFTER writing this word *)
-            word_count <-- (word_count.value +:. 1)
-          ]
+      [ when_ word_written
+          [ word_count <-- (word_count.value +:. 1) ]
+
       ; when_ uart_rts
-          [ loaded <-- vdd ]
+          [ (* Delay load_finished until AFTER last word commit *)
+            when_ (~:word_written)
+              [ loaded <-- vdd ]
+          ]
       ]
     ;
 
     { O.
       load_finished = loaded.value
     ; ram_write =
-        { (* CRITICAL FIX: write to word_count - 1 *)
-          address      = word_count.value -:. 1
+        { address      = word_count.value
         ; write_data   = word_in.value
-        ; write_enable = word_in.valid
+        ; write_enable = word_written
         }
     ; uart_rx_ready = vdd
     }
@@ -78,7 +80,7 @@ module Loader = struct
   ;;
 end
 
-(* ====================== FSM ====================== *)
+(* ====================== FSM  ====================== *)
 
 module States = struct
   type t =
@@ -105,11 +107,11 @@ let popcount_upto_16 (x : Signal.t) : Signal.t =
 ;;
 
 let mask_low_m_bits ~(m8 : Signal.t) : Signal.t =
-  (* bit i = 1 if i < m *)
+  (* bit i = 1 if i < m, placed at bit-position i (LSB side) *)
   List.init 64 ~f:(fun i ->
     let ii = of_int_trunc ~width:8 i in
     ii <: m8)
-  |> concat_msb
+  |> concat_lsb
 ;;
 
 let pow2_upto_16 (k8 : Signal.t) : Signal.t =
@@ -127,7 +129,9 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
   let spec = Reg_spec.create ~clock ~clear () in
   let sm   = State_machine.create (module States) spec in
 
-  (* Sync RAM read: set addr in Read_* state, consume next state *)
+  (* NOTE: RAM read_data is registered (1-cycle). addr0 is also a reg.
+     Therefore: set addr0 in the *previous* state, then "Read_*" is the wait
+     cycle, and "Consume_*" is where r0 is valid for that address. *)
   let addr0 = Variable.reg spec ~width:14 in
   let addr1 = zero 14 in
 
@@ -182,6 +186,9 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
   let w      = popcount_upto_16 subset_lo16 in
   let better = state_ok &: (w <: best.value) in
 
+  
+  let next_idx = mask_load_idx.value +:. 1 in
+
   compile
     [ sm.switch
         [ Loading,
@@ -190,40 +197,47 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
               ; machine_idx <--. 0
               ; ptr         <--. 1 (* word0 = machine_count, word1 = first header *)
               ; done_fired  <-- gnd
+              ; addr0       <--. 0 (* prime RAM for machine_count *)
               ; sm.set_next Read_machine_count
               ]
           ]
 
         ; Read_machine_count,
-          [ addr0 <--. 0
-          ; sm.set_next Consume_machine_count
+          [ (* wait 1 cycle for RAM read_data to settle *)
+            sm.set_next Consume_machine_count
           ]
 
         ; Consume_machine_count,
           [ machine_count <-- select r0 ~high:15 ~low:0
+          ; addr0         <-- ptr.value   (* prime first header *)
           ; sm.set_next Read_header
           ]
 
         ; Read_header,
-          [ addr0 <-- ptr.value
-          ; sm.set_next Consume_header
+          [ (* wait 1 cycle for header *)
+            sm.set_next Consume_header
           ]
 
         ; Consume_header,
-          [ m_lights <-- select r0 ~high:7 ~low:0
+          [ (* decode header from r0 *)
+            m_lights <-- select r0 ~high:7 ~low:0
           ; k_btns   <-- select r0 ~high:15 ~low:8
           ; target   <-- uresize ~width:64 (srl r0 ~by:16)
           ; tgt_mask <-- mask_low_m_bits ~m8:(select r0 ~high:7 ~low:0)
           ; mask_load_idx <--. 0
-          ; sm.set_next Read_masks
+
+          ; (* decide next using r0 directly (regs update next cycle) *)
+            let k_now = select r0 ~high:15 ~low:8 in
+            if_ (k_now ==:. 0)
+              [ sm.set_next Subset_init ]
+              [ addr0 <-- (ptr.value +:. 1)  (* prime first mask at ptr+1 *)
+              ; sm.set_next Read_masks
+              ]
           ]
 
         ; Read_masks,
-          [ if_ (k_btns.value ==:. 0)
-              [ sm.set_next Subset_init ]
-              [ addr0 <-- (ptr.value +:. 1 +: uresize ~width:14 mask_load_idx.value)
-              ; sm.set_next Consume_mask
-              ]
+          [ (* wait 1 cycle for current mask word *)
+            sm.set_next Consume_mask
           ]
 
         ; Consume_mask,
@@ -234,9 +248,12 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
                     r <-- mux2 (mask_load_idx.value ==: of_int_trunc ~width:5 i)
                       r0
                       r.value)))
+
           ; if_ (mask_load_idx.value +:. 1 ==: uresize ~width:5 k_btns.value)
               [ sm.set_next Subset_init ]
-              [ mask_load_idx <-- (mask_load_idx.value +:. 1)
+              [ (* prime next mask address *)
+                mask_load_idx <-- next_idx
+              ; addr0 <-- (ptr.value +:. 1 +: uresize ~width:14 next_idx)
               ; sm.set_next Read_masks
               ]
           ]
@@ -267,6 +284,7 @@ let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
           [ if_ last_machine
               [ sm.set_next Done ]
               [ machine_idx <-- (machine_idx.value +:. 1)
+              ; addr0       <-- ptr.value  (* prime next header *)
               ; sm.set_next Read_header
               ]
           ]
