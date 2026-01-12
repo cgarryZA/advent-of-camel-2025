@@ -7,6 +7,7 @@
   run_day05
   run_day06
   run_day09
+  run_day11
   )
  (libraries
   core

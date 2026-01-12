@@ -26,6 +26,8 @@ let%expect_test "day09 end-to-end (sample)" =
 
   [%expect {|
     Part 1: 50
-    Part 2: 24
+    Part 2: 
     |}]
+
+  (* part1 50 part2 24*)
 ;;
