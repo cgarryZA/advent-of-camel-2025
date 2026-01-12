@@ -1,4 +1,4 @@
-(* test/test_day05.ml *)
+(* test/test_day06.ml *)
 
 open! Core
 open! Hardcaml
