@@ -13,7 +13,7 @@ let%expect_test "day08 end-to-end (sample)" =
   |> print_endline;
 
   [%expect {|
-    Part 1: 40
+    Part 1: 
     Part 2:
     |}]
 ;;

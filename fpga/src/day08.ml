@@ -49,29 +49,30 @@ module Loader = struct
   let create _scope ({ clock; clear; uart_rx; uart_rts } : _ I.t) : _ O.t =
     let spec = Reg_spec.create ~clock ~clear () in
 
-    (* Pack 4 bytes -> 1x 32-bit word *)
+    (* Assemble 4 UART bytes into 1x 32-bit word *)
     let word_in = Util.shift_in ~clock ~clear ~n:4 uart_rx in
 
-    (* Count words written *)
-    let word_count =
-      reg_fb spec ~width:14 ~enable:word_in.valid ~f:(fun x -> x +:. 1)
-    in
+    let loaded  = Variable.reg spec ~width:1 in
+    let wr_addr = Variable.reg spec ~width:14 in
 
-    let loaded = Variable.reg spec ~width:1 in
+    let wr_en = word_in.valid &: ~:(loaded.value) in
 
     compile
-      [ when_ uart_rts
+      [ when_ wr_en
+          [ wr_addr <-- wr_addr.value +:. 1 ]
+      ; when_ uart_rts
           [ loaded <-- vdd ]
-      ];
+      ]
+    ;
 
     { O.
       load_finished = loaded.value
     ; ram_write =
-        { address      = word_count
+        { address      = wr_addr.value
         ; write_data   = word_in.value
-        ; write_enable = word_in.valid
+        ; write_enable = wr_en
         }
-    ; word_count    = word_count
+    ; word_count    = wr_addr.value
     ; uart_rx_ready = vdd
     }
   ;;
@@ -82,30 +83,88 @@ module Loader = struct
   ;;
 end
 
-(* ====================== LOADER TEST "ALGO" ====================== *)
-(* After load:
-   Part 1 = number of 32-bit words loaded
-   Part 2 = RAM[0] (first word written)
-*)
+(* ====================== STAGE 1 ALGO ====================== *)
+
+module States = struct
+  type t =
+    | Loading
+    | Addr_x | Wait_x | Consume_x
+    | Addr_y | Wait_y | Consume_y
+    | Addr_z | Wait_z | Consume_z
+    | Done
+  [@@deriving enumerate, sexp_of, compare ~localize]
+end
 
 let algo
     ~clock
     ~clear
     ~load_finished
-    ~(word_count : Signal.t)
-    ~(read_word  : Signal.t)
+    ~(read_word : Signal.t)
   =
   let spec = Reg_spec.create ~clock ~clear () in
+  let sm   = State_machine.create (module States) spec in
 
-  let fired = Variable.reg spec ~width:1 in
-  let done_pulse = load_finished &: ~:(fired.value) in
+  let addr = Variable.reg spec ~width:14 in
+
+  let x0 = Variable.reg spec ~width:32 in
+  let y0 = Variable.reg spec ~width:32 in
+  let z0 = Variable.reg spec ~width:32 in
+
+  let done_fired = Variable.reg spec ~width:1 in
+  let done_pulse = sm.is Done &: ~:(done_fired.value) in
 
   compile
-    [ when_ done_pulse
-        [ fired <-- vdd ]
+    [ sm.switch
+        [ ( Loading
+          , [ when_ load_finished [ sm.set_next Addr_x ] ] )
+
+        ; ( Addr_x
+          , [ addr <--. 0
+            ; sm.set_next Wait_x
+            ] )
+
+        ; ( Wait_x
+          , [ sm.set_next Consume_x ] )
+
+        ; ( Consume_x
+          , [ x0 <-- read_word
+            ; sm.set_next Addr_y
+            ] )
+
+        ; ( Addr_y
+          , [ addr <--. 1
+            ; sm.set_next Wait_y
+            ] )
+
+        ; ( Wait_y
+          , [ sm.set_next Consume_y ] )
+
+        ; ( Consume_y
+          , [ y0 <-- read_word
+            ; sm.set_next Addr_z
+            ] )
+
+        ; ( Addr_z
+          , [ addr <--. 2
+            ; sm.set_next Wait_z
+            ] )
+
+        ; ( Wait_z
+          , [ sm.set_next Consume_z ] )
+
+        ; ( Consume_z
+          , [ z0 <-- read_word
+            ; sm.set_next Done
+            ] )
+
+        ; ( Done
+          , [ when_ (done_fired.value ==:. 0)
+                [ done_fired <-- vdd ]
+            ] )
+        ]
     ];
 
-  word_count, read_word, done_pulse
+  addr.value, x0.value, y0.value, done_pulse
 ;;
 
 (* ====================== TOP ====================== *)
@@ -132,9 +191,17 @@ let create
       }
   in
 
-  (* Read RAM[0] continuously *)
+  let addr, p1, p2, done_pulse =
+    algo
+      ~clock
+      ~clear
+      ~load_finished:loader.load_finished
+      ~read_word:ram.read_data.(0)
+  in
+
+  (* Drive RAM read address *)
   Ram.Port.Of_signal.assign ram_ports.(0)
-    { address      = zero 14
+    { address      = addr
     ; write_data   = zero 32
     ; write_enable = gnd
     };
@@ -144,15 +211,6 @@ let create
     ; write_data   = zero 32
     ; write_enable = gnd
     };
-
-  let p1, p2, done_pulse =
-    algo
-      ~clock
-      ~clear
-      ~load_finished:loader.load_finished
-      ~word_count:loader.word_count
-      ~read_word:ram.read_data.(0)
-  in
 
   let%tydi { byte_out } =
     Print_decimal_outputs.hierarchical scope
