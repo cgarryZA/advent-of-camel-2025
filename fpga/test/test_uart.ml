@@ -16,22 +16,28 @@ let%expect_test "uart tx test" =
   let sim = Sim.create ~config:Cyclesim.Config.trace_all (create scope) in
   let i = Cyclesim.inputs sim in
   let waves, sim = Waveform.create sim in
+
   let cycle ?(n = 1) () =
     for _ = 1 to n do
       Cyclesim.cycle sim
     done
   in
+
   i.clear := Bits.vdd;
   cycle ();
   i.clear := Bits.gnd;
   cycle ();
+
   i.byte_in.valid := Bits.gnd;
   cycle ();
+
   i.byte_in.valid := Bits.vdd;
   i.byte_in.value := Bits.of_int_trunc ~width:8 0x88;
   cycle ();
+
   i.byte_in.valid := Bits.gnd;
   cycle ~n:150 ();
+
   let display_rules =
     [ Display_rule.Custom
         (fun port ->
@@ -40,14 +46,15 @@ let%expect_test "uart tx test" =
           else Some Wave_format.Binary)
     ]
   in
+
   Waveform.expect
     waves
     ~display_rules
     ~wave_width:(-2)
     ~display_height:32
     ~display_width:80;
-  [%expect
-    {|
+
+  [%expect {|
     ┌Signals───────────┐┌Waves─────────────────────────────────────────────────────┐
     │                  ││─╥────────────────────────────────────────────────────────│
     │byte_in$valid     ││ ║0                                                       │

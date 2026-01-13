@@ -1,7 +1,6 @@
 (library
  (name advent_of_caml_test)
  (libraries
-  async
   core
   core_unix
   hardcaml

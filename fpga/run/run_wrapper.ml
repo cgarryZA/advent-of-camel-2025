@@ -172,15 +172,21 @@ let parse_or_die
 let run_day
     ~(day : int)
     ~(hierarchical : Scope.t -> _)
-    ~(input_path : string)
     ~(parser :
         ?verbose:bool ->
         string ->
         Advent_of_caml_input_parser.Util.Uart_symbol.t list)
-    ?(vcd_file : string option = None)
     ?(run_cycles = 500_000)
     ()
   =
+  let input_path =
+    sprintf "inputs/input%d.txt" day
+  in
+
+  let vcd_file =
+    Some (sprintf "/tmp/day%02d_run.vcd" day)
+  in
+
   let inputs =
     parse_or_die
       ~day
@@ -198,8 +204,8 @@ let run_day
   feed_inputs sim inputs;
   cycle ~n:run_cycles sim;
 
-  (* Colour only the numeric results *)
   let output = get_uart_output sim in
+
   let coloured =
     output
     |> String.split_lines
