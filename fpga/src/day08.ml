@@ -318,9 +318,8 @@ let algo ~clock ~clear ~load_finished ~(word_count : Signal.t) ~(read_word : Sig
               sm.set_next Next_edge
             ])
 
-
         ; (Next_edge,
-            [ if_ (e_idx.value ==:. 9)
+            [ if_ (e_idx.value ==:. 15)
                 [ sm.set_next Sweep_init ]
                 [ e_idx <-- e_idx.value +:. 1
                 ; sm.set_next Apply_load ] ])
