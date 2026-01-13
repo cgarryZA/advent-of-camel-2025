@@ -1,6 +1,7 @@
 (* run/run_wrapper.ml *)
 
 open! Core
+open! Core_unix
 open! Hardcaml
 
 module Ulx3s = Advent_of_caml.Ulx3s
@@ -135,6 +136,12 @@ let resolve_path path =
     path
 ;;
 
+let file_exists path =
+  (* Stdlib.Sys.file_exists is fine here; we just want a boolean. *)
+  try Stdlib.Sys.file_exists path with
+  | _ -> false
+;;
+
 let parse_or_die
     ~(day : int)
     ~(path : string)
@@ -143,30 +150,70 @@ let parse_or_die
         string ->
         Advent_of_caml_input_parser.Util.Uart_symbol.t list)
   =
-  let full_path = resolve_path path in
-  try
-    let inputs =
-      parse full_path
-      @ [ Advent_of_caml_input_parser.Util.Uart_symbol.Rts true ]
-    in
-    printf
-      "Running %sDay %d%s found at %shttps://adventofcode.com/2025/day/%d%s\n%!"
-      Color.green day Color.reset
-      Color.blue day Color.reset;
-    inputs
-  with
-  | _ ->
+  let alt_path =
+    (* support inputs/input08.txt as well as inputs/input8.txt *)
+    let dir = Filename.dirname path in
+    let base = Filename.basename path in
+    match String.chop_prefix base ~prefix:"input" with
+    | None -> path
+    | Some rest ->
+        (* rest is like "8.txt" *)
+        (match String.lsplit2 rest ~on:'.' with
+         | None -> path
+         | Some (d, ext) ->
+             (match Int.of_string_opt d with
+              | None -> path
+              | Some n ->
+                  Filename.concat dir (sprintf "input%02d.%s" n ext)))
+  in
+
+  let candidates =
+    [ resolve_path path
+    ; resolve_path alt_path
+    ; path
+    ; alt_path
+    ; Filename.concat (Sys_unix.getcwd ()) path
+    ; Filename.concat (Sys_unix.getcwd ()) alt_path
+    ; Filename.concat (Sys_unix.getcwd ()) ("../" ^ path)
+    ; Filename.concat (Sys_unix.getcwd ()) ("../" ^ alt_path)
+    ; Filename.concat (Sys_unix.getcwd ()) ("../../" ^ path)
+    ; Filename.concat (Sys_unix.getcwd ()) ("../../" ^ alt_path)
+    ]
+    |> List.dedup_and_sort ~compare:String.compare
+  in
+
+  match List.find candidates ~f:file_exists with
+  | None ->
       eprintf
-        "%sInput file not found.\n\n\
+        "%sInput file not found.%s\n\n\
+         Looked for:\n\
+         %s\n\n\
          Download your input from:\n\
          %shttps://adventofcode.com/2025/day/%d/input%s\n\n\
-         Then save it as:\n\
-         %s%s%s\n%s"
-        Color.red
+         Then save it as (either name is accepted):\n\
+         %sinputs/input%d.txt%s  or  %sinputs/input%02d.txt%s\n"
+        Color.red Color.reset
+        (candidates |> List.map ~f:(fun p -> "  - " ^ p) |> String.concat ~sep:"\n")
         Color.blue day Color.reset
-        Color.blue path Color.reset
-        Color.reset;
+        Color.blue day Color.reset Color.blue day Color.reset;
       exit 1
+  | Some chosen_path ->
+      try
+        let inputs =
+          parse chosen_path
+          @ [ Advent_of_caml_input_parser.Util.Uart_symbol.Rts true ]
+        in
+        printf
+          "Running %sDay %d%s using %s%s%s\n%!"
+          Color.green day Color.reset
+          Color.blue chosen_path Color.reset;
+        inputs
+      with
+      | exn ->
+          eprintf
+            "%sFailed to parse input file:%s %s\n\n%s\n"
+            Color.red Color.reset chosen_path (Exn.to_string exn);
+          raise exn
 ;;
 
 let run_day
