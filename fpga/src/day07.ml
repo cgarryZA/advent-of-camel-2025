@@ -1,2 +1,200 @@
 (* src/day07.ml *)
-include Day_stub
+
+open! Core
+open! Hardcaml
+open! Signal
+open! Hardcaml.Always
+
+let clock_freq       = Ulx3s.Clock_freq.Clock_25mhz
+let uart_fifo_depth  = 32
+let extra_synth_args = []
+
+(* ====================== RAM ====================== *)
+
+module Ram = Loadable_pseudo_dual_port_ram.Make (struct
+  let width           = 1
+  let depth           = 16384
+  let num_ports       = 2
+  let zero_on_startup = false
+end)
+
+(* ====================== LOADER ====================== *)
+(* For bring-up: write 1 bit per received byte.
+   '^' -> 1, everything else ('.', '\n', etc.) -> 0
+   RTS ends load.
+*)
+
+module Loader = struct
+  module I = struct
+    type 'a t =
+      { clock    : 'a
+      ; clear    : 'a
+      ; uart_rx  : 'a Uart.Byte_with_valid.t
+      ; uart_rts : 'a
+      }
+    [@@deriving hardcaml]
+  end
+
+  module O = struct
+    type 'a t =
+      { load_finished : 'a
+      ; ram_write     : 'a Ram.Port.t
+      ; write_count   : 'a [@bits 14]
+      ; uart_rx_ready : 'a
+      }
+    [@@deriving hardcaml]
+  end
+
+  let create _ ({ clock; clear; uart_rx; uart_rts } : _ I.t) : _ O.t =
+    let spec = Reg_spec.create ~clock ~clear () in
+
+    (* counts written entries *)
+    let write_count =
+      reg_fb spec ~width:14 ~enable:(uart_rx.valid) ~f:(fun x -> x +:. 1)
+    in
+
+    let loaded = Variable.reg spec ~width:1 in
+
+    compile
+      [ when_ uart_rts [ loaded <-- vdd ] ]
+    ;
+
+    let wr_en = uart_rx.valid &: ~:(loaded.value) in
+    
+    let wr_data = uart_rx.value ==:. Char.to_int '^' in
+
+    { O.
+      load_finished = loaded.value
+    ; ram_write =
+        { address      = uresize ~width:14 write_count
+        ; write_data   = wr_data
+        ; write_enable = wr_en
+        }
+    ; write_count   = write_count
+    ; uart_rx_ready = vdd
+    }
+  ;;
+
+  let hierarchical scope =
+    let module S = Hierarchy.In_scope (I) (O) in
+    S.hierarchical ~name:"loader" ~scope create
+  ;;
+end
+
+(* ====================== ALGORITHM (bring-up) ====================== *)
+
+module States = struct
+  type t =
+    | Loading
+    | Read
+    | Consume
+    | Done
+  [@@deriving enumerate, sexp_of, compare ~localize]
+end
+
+let algo ~clock ~clear ~(read_data : Signal.t array) ~load_finished =
+  let spec = Reg_spec.create ~clock ~clear () in
+  let sm   = State_machine.create (module States) spec in
+
+  let bit0 = Variable.reg spec ~width:1 in
+  let bit1 = Variable.reg spec ~width:1 in
+
+  let done_fired = Variable.reg spec ~width:1 in
+  let done_pulse = sm.is Done &: ~:(done_fired.value) in
+
+  compile
+    [ sm.switch
+        [ ( Loading
+          , [ when_ load_finished
+                [ done_fired <-- gnd
+                ; sm.set_next Read
+                ]
+            ]
+          )
+
+        ; ( Read
+          , [ sm.set_next Consume ]
+          )
+
+        ; ( Consume
+          , [ bit0 <-- read_data.(0)
+            ; bit1 <-- read_data.(1)
+            ; sm.set_next Done
+            ]
+          )
+
+        ; ( Done
+          , [ when_ (done_fired.value ==:. 0) [ done_fired <-- vdd ] ]
+          )
+        ]
+    ]
+  ;
+
+  bit0.value, bit1.value, done_pulse
+;;
+
+(* ====================== TOP ====================== *)
+
+let create
+    scope
+    ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ Ulx3s.I.t)
+  =
+  let loader =
+    Loader.hierarchical scope { clock; clear; uart_rx; uart_rts }
+  in
+
+  let ram_ports =
+    Array.init 2 ~f:(fun _ -> Ram.Port.Of_signal.wires ())
+  in
+
+  let%tydi ram =
+    Ram.hierarchical ~name:"ram" scope
+      { clock
+      ; clear
+      ; load_ports    = [| loader.ram_write; Ram.Port.unused |]
+      ; load_finished = loader.load_finished
+      ; ram_ports
+      }
+  in
+
+  (* constant read addresses: 0 and 1 *)
+  Ram.Port.Of_signal.assign ram_ports.(0)
+    { address      = zero 14
+    ; write_data   = zero 1
+    ; write_enable = gnd
+    }
+  ;
+
+  Ram.Port.Of_signal.assign ram_ports.(1)
+    { address      = vdd |> uresize ~width:14  (* 1 *)
+    ; write_data   = zero 1
+    ; write_enable = gnd
+    }
+  ;
+
+  let bit0, bit1, done_pulse =
+    algo ~clock ~clear
+      ~read_data:ram.read_data
+      ~load_finished:loader.load_finished
+  in
+
+  let%tydi { byte_out } =
+    Print_decimal_outputs.hierarchical scope
+      { clock
+      ; clear
+      ; part1 = { value = uresize ~width:60 bit0; valid = done_pulse }
+      ; part2 = { value = uresize ~width:60 bit1; valid = done_pulse }
+      }
+  in
+
+  { Ulx3s.O.
+    leds          = concat_lsb [ ~:clear; uart_rx_overflow; loader.load_finished; zero 5 ]
+  ; uart_tx       = byte_out
+  ; uart_rx_ready = loader.uart_rx_ready
+  }
+;;
+
+let hierarchical scope =
+  let module S = Hierarchy.In_scope (Ulx3s.I) (Ulx3s.O) in
+  S.hierarchical ~name:"day07" ~scope create
+;;
