@@ -1,33 +1,21 @@
-(* test/test_day09.ml *)
-
 open! Core
 open! Hardcaml
 
-module Day09 = Advent_of_caml.Day09
-open Test_wrapper
+open Day_test
 
 let%expect_test "day09 end-to-end (sample)" =
-  let sim =
-    create
-      ~hierarchical:Day09.hierarchical
-      ~vcd_file:"/tmp/day09.vcd"
-      ()
-  in
-
-  let inputs =
-    Advent_of_caml_input_parser.Day09.parse "sample9.txt"
-    @ [ Advent_of_caml_input_parser.Util.Uart_symbol.Rts true ]
-  in
-
-  feed_inputs sim inputs;
-  cycle ~n:500_000 sim;
-
-  dump_uart_output sim;
+  run_sample
+    ~day:9
+    ~hierarchical:Advent_of_caml.Day09.hierarchical
+    ~parser:Advent_of_caml_input_parser.Day09.parse
+    ~cycles:100_000
+    ()
+  |> print_endline;
 
   [%expect {|
     Part 1: 50
-    Part 2: 
+    Part 2:
     |}]
-
-  (* part1 50 part2 24*)
 ;;
+
+(*part 2: 24*)

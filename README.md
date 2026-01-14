@@ -113,6 +113,19 @@ For part 1 and part 2, the same datapath is reused, with a phase flag selecting 
 
 The design avoids buffering entire expressions. Instead, each value is folded into an accumulator as soon as it is decoded, allowing the computation to proceed in a single pass with minimal state. Final results are emitted once the end-of-stream delimiter is encountered.
 
+### Day 8, Part 1 + Part 2  
+[Hardcaml solution](fpga/src/day08.ml) // [Problem Link](https://adventofcode.com/2025/day/8)
+
+This design implements a streaming hardware version of Kruskal’s algorithm using an on-chip union–find structure.
+
+Point coordinates are preloaded into RAM over UART, with the number of points inferred implicitly from the preload phase. Candidate edges are then streamed in sorted order and processed one at a time. For each edge, the circuit performs iterative root finding using parent pointers stored in RAM, followed by union-by-size when the roots differ. The component count is tracked explicitly to detect when the spanning tree completes.
+
+For part 1, the design captures a snapshot after a fixed number of processed edges and performs a sweep over the component-size RAM to identify the three largest connected components, whose sizes are multiplied to form the result.
+
+For part 2, the final edge that completes the spanning tree is detected directly in hardware. The corresponding point coordinates are read from RAM and combined to produce the final output.
+
+The entire computation is performed as a single pass over the edge stream, with no buffering or sorting in hardware. All memory access patterns are explicit and deterministic, and the design cleanly separates load, union–find traversal, and result extraction.
+
 ### Day 9, Part 1  
 [Hardcaml solution](fpga/src/day09.ml) // [Problem Link](https://adventofcode.com/2025/day/9)
 

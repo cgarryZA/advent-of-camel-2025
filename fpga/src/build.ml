@@ -4,9 +4,19 @@ open! Hardcaml
 let ( ^/ ) = Filename.concat
 
 let designs =
-  [ "blinky", (module Blinky : Ulx3s.Design)
+  [ "day01",     (module Day01     : Ulx3s.Design)
+  ; "day02",     (module Day02     : Ulx3s.Design)
+  ; "day03",     (module Day03     : Ulx3s.Design)
+  ; "day04",     (module Day04     : Ulx3s.Design)
+  ; "day05",     (module Day05     : Ulx3s.Design)
+  ; "day06",     (module Day06     : Ulx3s.Design)
+  ; "day07",     (module Day07     : Ulx3s.Design)
+  ; "day08",     (module Day08     : Ulx3s.Design)
+  ; "day09",     (module Day09     : Ulx3s.Design)
+  ; "day10",     (module Day10     : Ulx3s.Design)
+  ; "day11",     (module Day11     : Ulx3s.Design)
+  ; "day12",     (module Day12     : Ulx3s.Design)
   ; "uart-test", (module Uart_test : Ulx3s.Design)
-  ; "day01", (module Day01 : Ulx3s.Design)
   ]
 ;;
 
