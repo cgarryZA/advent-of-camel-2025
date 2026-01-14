@@ -309,9 +309,13 @@ let algo
         ; (Init_ram_setup,
             [ init_i     <--. 0
             ; components <-- n_points.value
-            ; k_part1_r  <-- mux2 (n_points.value <=:. 20)
-                   (of_int_trunc ~width:count_w 10)
-                   (of_int_trunc ~width:count_w 1000)
+            ; k_part1_r <--
+                mux2 (n_points.value <=:. 20)
+                  (of_int_trunc ~width:count_w 10)
+                  (mux2 (n_points.value <:. 1000)
+                    (uresize ~width:count_w (srl n_points.value ~by:1))
+                    (uresize ~width:count_w n_points.value))
+
             ; sm.set_next Init_ram_write
             ])
 
