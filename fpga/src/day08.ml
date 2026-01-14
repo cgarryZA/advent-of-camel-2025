@@ -12,8 +12,7 @@ let extra_synth_args = []
 (* NOTE:
    - Use 10 for sample tests (20 points).
    - Use 1000 for real input (1000 points). *)
-let k_part1 = 10
-
+let k_part1 = 1000
 (* ====================== PARAMS ====================== *)
 
 let max_points = 1024
@@ -486,13 +485,15 @@ let algo
 
         ; (Sweep_req,
             [ sm.set_next Sweep_consume ])
-
         ; (Sweep_consume,
             let i  = sweep_i.value in
             let pi = parent_rd.(0) in
-            let si = size_rd.(0) in
             let is_root = pi ==: idx_lsb i in
-            let s = mux2 is_root si (zero size_w) in
+            let s =
+              mux2 is_root
+                size_rd.(0)
+                (zero size_w)
+            in
             let last_i = n_points.value -:. 1 in
             [ when_ (s >: top1.value)
                 [ top3 <-- top2.value
@@ -553,9 +554,9 @@ let algo
              (addr_lsb (uresize ~width:size_w child.value))
              (mux2 (sm.is FindU_req |: sm.is FindV_req)
                 (addr_lsb (uresize ~width:size_w cur.value))
-                (mux2 (sm.is Sweep_req)
-                   (addr_lsb sweep_i.value)
-                   (zero addr_bits))))
+                  (mux2 (sm.is Sweep_req |: sm.is Sweep_consume)
+                    (addr_lsb sweep_i.value)
+                    (zero addr_bits))))
     ; write_data =
         mux2 (sm.is Init_ram_write)
           (idx_lsb init_i.value)
@@ -583,9 +584,9 @@ let algo
                 (addr_lsb (uresize ~width:size_w child.value))
                 (mux2 (sm.is Union_write_b)
                    (addr_lsb (uresize ~width:size_w root.value))
-                   (mux2 (sm.is Sweep_req)
-                      (addr_lsb sweep_i.value)
-                      (zero addr_bits)))))
+                   (mux2 (sm.is Sweep_req |: sm.is Sweep_consume)
+                    (addr_lsb sweep_i.value)
+                    (zero addr_bits)))))
     ; write_data =
         mux2 (sm.is Init_ram_write)
           (of_int_trunc ~width:size_w 1)
