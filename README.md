@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.linkedin.com/in/christian-garry/">
+  <a href="https://www.linkedin.com/in/christian-tt-garry/">
     <img src="https://img.shields.io/badge/LinkedIn-Christian_Garry-0A66C2?style=for-the-badge&logo=linkedin">
   </a>
   <a href="https://christiangarry.com">
