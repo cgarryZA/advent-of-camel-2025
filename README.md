@@ -163,12 +163,21 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 <a href="https://adventofcode.com/2025/day/11"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
 </td>
 </tr>
+
+<tr>
+<td><b>Day 12</b></td>
+<td>
+<a href="#day-12"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
+<a href="fpga/src/day12.ml"><img src="https://img.shields.io/badge/Code-day12.ml-f85149"></a>
+<a href="https://adventofcode.com/2025/day/12"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
+</td>
+</tr>
 </table>
 
 ---
 
 <a name="day-1"></a>
-### Day 1, Part 1 + Part 2
+### Day 1
 
 <p>
 <a href="fpga/src/day01.ml"><img src="https://img.shields.io/badge/Code-day01.ml-f85149"></a>
@@ -187,7 +196,7 @@ Instructions are processed sequentially at a rate of one per cycle, and the per-
 ---
 
 <a name="day-2"></a>
-### Day 2, Part 1 + Part 2
+### Day 2
 
 <p>
 <a href="fpga/src/day02.ml"><img src="https://img.shields.io/badge/Code-day02.ml-f85149"></a>
@@ -206,7 +215,7 @@ The design avoids per-digit iteration in the main loop. All candidates are evalu
 ---
 
 <a name="day-3"></a>
-### Day 3, Part 1 + Part 2
+### Day 3
 
 <p>
 <a href="fpga/src/day03.ml"><img src="https://img.shields.io/badge/Code-day03.ml-f85149"></a>
@@ -226,7 +235,7 @@ The computation proceeds in a single pass over the input, advancing one digit pe
 ---
 
 <a name="day-4"></a>
-### Day 4, Part 1 + Part 2
+### Day 4
 
 <p>
 <a href="fpga/src/day04.ml"><img src="https://img.shields.io/badge/Code-day04.ml-f85149"></a>
@@ -245,7 +254,7 @@ During each scan, one packed word is processed per cycle. The design is paramete
 ---
 
 <a name="day-5"></a>
-### Day 5, Part 1 + Part 2
+### Day 5
 
 <p>
 <a href="fpga/src/day05.ml"><img src="https://img.shields.io/badge/Code-day05.ml-f85149"></a>
@@ -266,7 +275,7 @@ The entire computation is performed without sorting in hardware, relying instead
 ---
 
 <a name="day-6"></a>
-### Day 6, Part 1 + Part 2
+### Day 6
 
 <p>
 <a href="fpga/src/day06.ml"><img src="https://img.shields.io/badge/Code-day06.ml-f85149"></a>
@@ -285,7 +294,7 @@ The design avoids buffering entire expressions. Instead, each value is folded in
 ---
 
 <a name="day-8"></a>
-### Day 8, Part 1 + Part 2
+### Day 8
 
 <p>
 <a href="fpga/src/day08.ml"><img src="https://img.shields.io/badge/Code-day08.ml-f85149"></a>
@@ -340,7 +349,7 @@ For each machine, the first 16 masks are cached into registers and the circuit e
 RAM access is explicitly scheduled as a 1-cycle read pipeline: addresses are set in one state, then consumed the next cycle. The design uses a small FSM to step through “read header”, “read masks”, “subset sweep”, and “advance to next machine” phases, emitting the final part 1 total once all machines have been processed.
 
 <a name="day-11"></a>
-### Day 11 Part 1 + Part 2
+### Day 11
 
 <p>
 <a href="fpga/src/day11.ml"><img src="https://img.shields.io/badge/Code-day11.ml-f85149"></a>
@@ -357,3 +366,24 @@ For part 1, the circuit performs a forward propagation starting from you, accumu
 For part 2, the same propagation engine is reused across a fixed set of source–target runs (e.g. svr→fft, fft→dac, dac→out). Before each run, node counts are reset in RAM with only the start node seeded. Each traversal captures the final count at the target node. The required result is then formed by combining these captured values with a small number of 64-bit multiplications and additions.
 
 RAM accesses are explicitly staged: addresses are issued in one state and consumed the next, with a dual-port RAM allowing simultaneous read and write during propagation. A single FSM sequences header decode, per-run reset, traversal, capture, and final computation. Both part 1 and part 2 results are emitted once all runs complete.
+
+
+
+<a name="day-12"></a>
+### Day 12
+
+<p>
+<a href="fpga/src/day12.ml"><img src="https://img.shields.io/badge/Code-day12.ml-f85149"></a>
+<a href="https://adventofcode.com/2025/day/12"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
+</p>
+The sample input for Day 12 implies a hard polyomino packing problem requiring search and backtracking. However, the actual puzzle input is degenerate: no region ever requires interlocking shapes.
+
+For the real input, a region fits iff the number of available 3×3 blocks is at least the number of presents:
+
+(w / 3) * (h / 3) ≥ sum(counts)
+
+
+The input parser precomputes these values, and the hardware simply checks this predicate per region. This yields a small, deterministic, purely arithmetic design with no geometry or search.
+
+A full hardware packing solver would be significantly more difficult and time consuming. I may come back to it if I have time.
