@@ -137,7 +137,6 @@ let resolve_path path =
 ;;
 
 let file_exists path =
-  (* Stdlib.Sys.file_exists is fine here; we just want a boolean. *)
   try Stdlib.Sys.file_exists path with
   | _ -> false
 ;;
@@ -151,20 +150,18 @@ let parse_or_die
         Advent_of_caml_input_parser.Util.Uart_symbol.t list)
   =
   let alt_path =
-    (* support inputs/input08.txt as well as inputs/input8.txt *)
     let dir = Filename.dirname path in
     let base = Filename.basename path in
     match String.chop_prefix base ~prefix:"input" with
     | None -> path
     | Some rest ->
-        (* rest is like "8.txt" *)
         (match String.lsplit2 rest ~on:'.' with
          | None -> path
          | Some (d, ext) ->
-             (match Int.of_string_opt d with
-              | None -> path
-              | Some n ->
-                  Filename.concat dir (sprintf "input%02d.%s" n ext)))
+             match Int.of_string_opt d with
+             | None -> path
+             | Some n ->
+                 Filename.concat dir (sprintf "input%02d.%s" n ext))
   in
 
   let candidates =
@@ -198,6 +195,13 @@ let parse_or_die
         Color.blue day Color.reset Color.blue day Color.reset;
       exit 1
   | Some chosen_path ->
+      let display_path =
+        match dune_project_root () with
+        | Some root when String.is_prefix chosen_path ~prefix:root ->
+            String.drop_prefix chosen_path (String.length root + 1)
+        | _ ->
+            Filename.basename chosen_path
+      in
       try
         let inputs =
           parse chosen_path
@@ -206,7 +210,7 @@ let parse_or_die
         printf
           "Running %sDay %d%s using %s%s%s\n%!"
           Color.green day Color.reset
-          Color.blue chosen_path Color.reset;
+          Color.blue display_path Color.reset;
         inputs
       with
       | exn ->
