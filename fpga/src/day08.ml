@@ -9,17 +9,13 @@ let clock_freq       = Ulx3s.Clock_freq.Clock_25mhz
 let uart_fifo_depth  = 64
 let extra_synth_args = []
 
-(* NOTE:
-   - Use 10 for sample tests (20 points).
-   - Use 1000 for real input (1000 points). *)
-let k_part1 = 1000
 (* ====================== PARAMS ====================== *)
 
 let max_points = 1024
-let addr_bits  = Int.ceil_log2 max_points     (* 10 *)
-let idx_w      = addr_bits                    (* 10 *)
-let size_w     = addr_bits + 1                (* 11, safe *)
-let count_w    = 32                           (* edge_count, safe *)
+let addr_bits  = Int.ceil_log2 max_points
+let idx_w      = addr_bits
+let size_w     = addr_bits + 1
+let count_w    = 32
 
 let addr_lsb (x : Signal.t) = select x ~high:(addr_bits - 1) ~low:0
 let idx_lsb  (x : Signal.t) = select x ~high:(idx_w - 1) ~low:0
@@ -142,6 +138,8 @@ let algo
   let init_i         = Variable.reg spec ~width:size_w in
   let components     = Variable.reg spec ~width:size_w in
 
+  let k_part1_r      = Variable.reg spec ~width:count_w in
+
   let edge_count     = Variable.reg spec ~width:count_w in
 
   let part1_captured = Variable.reg spec ~width:1 in
@@ -154,10 +152,10 @@ let algo
   let xs_word_idx = Variable.reg spec ~width:size_w in
 
   (* ---------- edge u16/v16 UART assembly ---------- *)
-  let u_lo    = Variable.reg spec ~width:8 in
-  let v_lo    = Variable.reg spec ~width:8 in
-  let u_half  = Variable.reg spec ~width:1 in
-  let v_half  = Variable.reg spec ~width:1 in
+  let u_lo     = Variable.reg spec ~width:8 in
+  let v_lo     = Variable.reg spec ~width:8 in
+  let u_half   = Variable.reg spec ~width:1 in
+  let v_half   = Variable.reg spec ~width:1 in
   let edge_u16 = Variable.reg spec ~width:16 in
   let edge_v16 = Variable.reg spec ~width:16 in
 
@@ -168,6 +166,7 @@ let algo
 
   let root  = Variable.reg spec ~width:idx_w in
   let child = Variable.reg spec ~width:idx_w in
+
   let merged_size = Variable.reg spec ~width:size_w in
   let did_union_r = Variable.reg spec ~width:1 in
 
@@ -183,14 +182,12 @@ let algo
   let done_fired = Variable.reg spec ~width:1 in
   let done_pulse = sm.is Done &: ~:(done_fired.value) in
 
-  (* Backpressure:
-     Only claim we're ready in states where we accept a new byte. *)
   let uart_rx_ready =
     sm.is Xs_wait |: sm.is Wait_u |: sm.is Wait_v
   in
 
   (* ---------- helpers ---------- *)
-  let u8  = select rx_byte ~high:7 ~low:0 in
+  let u8       = select rx_byte ~high:7 ~low:0 in
   let byte_u32 = uresize ~width:32 u8 in
 
   let product_top3 =
@@ -200,7 +197,7 @@ let algo
   in
 
   let want_part1_sweep_now =
-    (edge_count.value ==: of_int_trunc ~width:count_w k_part1)
+    (edge_count.value ==: k_part1_r.value)
     &: ~:(part1_captured.value)
   in
 
@@ -234,7 +231,7 @@ let algo
     let xu   = uresize ~width:60 (xs_rd.(0)) in
     let xv   = uresize ~width:60 (xs_rd.(1)) in
     let prod = xu *: xv in
-    ignore (u_idx, v_idx); (* indices are used to set RAM addrs in Part2_xs_req *)
+    ignore (u_idx, v_idx);
     select prod ~high:59 ~low:0
   in
 
@@ -312,6 +309,9 @@ let algo
         ; (Init_ram_setup,
             [ init_i     <--. 0
             ; components <-- n_points.value
+            ; k_part1_r  <-- mux2 (n_points.value <=:. 20)
+                   (of_int_trunc ~width:count_w 10)
+                   (of_int_trunc ~width:count_w 1000)
             ; sm.set_next Init_ram_write
             ])
 
@@ -434,7 +434,7 @@ let algo
             ; when_ (want_part1_sweep_now)
                 [ want_sweep <-- vdd ]
 
-            ; (* choose root/child by size (same as old: s_ru >= s_rv => attach rv->ru) *)
+            ; (* choose root/child by size *)
               if_ (s_ru >=: s_rv)
                 [ root  <-- ru.value
                 ; child <-- rv.value
