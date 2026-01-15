@@ -41,23 +41,21 @@ def main():
     ok = True
 
     for part in ("part1", "part2"):
-        # Structural check: key must exist
+        # Structural checks
         if part not in answers[day]:
-            die(
-                f"Missing key '{part}' for day {day} "
-                f"in /inputs/answers.json"
-            )
+            die(f"Missing key '{part}' for day {day} in answers.json")
 
         if part not in outputs[day]:
-            die(
-                f"Missing key '{part}' for day {day} "
-                f"in /inputs/outputs.json"
-            )
+            die(f"Missing key '{part}' for day {day} in outputs.json")
 
         a = answers[day][part]
         o = outputs[day][part]
 
-        # Value comparison (null is allowed)
+        # Semantic comparison
+        if a is None:
+            print(f"⚪ Day {day} {part} skipped (no canonical answer)")
+            continue
+
         if a != o:
             print(f"❌ Day {day} {part} mismatch")
             print(f"   expected: {a}")
@@ -71,7 +69,6 @@ def main():
     else:
         print(f"\nDay {day} COMPLETED WITH MISMATCHES")
 
-    # Never fail on mismatches
     sys.exit(0)
 
 if __name__ == "__main__":
