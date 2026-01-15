@@ -127,8 +127,6 @@ ocamlc -version
 
 Once the correct opam switch is active, you can build and run the project as described below.
 
----
-
 <a name="user-guide"></a>
 ## Using the repo
 <a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
