@@ -109,23 +109,8 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 ---
 <a name="solutions"></a>
 
-<table width="100%">
-<tr>
-<td align="left">
-
-## Solutions
-
-</td>
-<td align="right">
-
-<a href="#readme-top">
-  <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e">
-</a>
-
-</td>
-</tr>
-</table>
-
+## Solutions <a href="#readme-top"> 
+<img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 <div align="center">
 
 <!-- Calendar GIF -->
