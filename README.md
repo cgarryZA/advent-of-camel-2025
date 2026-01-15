@@ -206,7 +206,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
   <td><a href="#day-9"><img src="https://img.shields.io/badge/09-Done-22c55e"></a></td>
   <td><a href="#day-10"><img src="https://img.shields.io/badge/10-Done-22c55e"></a></td>
   <td><a href="#day-11"><img src="https://img.shields.io/badge/11-Done-22c55e"></a></td>
-  <td><a href="#solutions"><img src="https://img.shields.io/badge/12-Done-22c55e"></td>
+  <td><a href="#day-12"><img src="https://img.shields.io/badge/12-Done-22c55e"></td>
 </tr>
 
 </table>
@@ -247,8 +247,6 @@ For part 1, the circuit checks whether an ID consists of exactly two identical h
 
 The design avoids per-digit iteration in the main loop. All candidates are evaluated in a single pass, with one ID tested per cycle. Valid IDs contribute their numeric value to the corresponding accumulator. The final sums for part 1 and part 2 are emitted once all ranges have been processed.
 
-
-
 <a name="day-3"></a>
 ### Day 3
 
@@ -267,8 +265,6 @@ When a line boundary is encountered, the candidates corresponding to sequence le
 The computation proceeds in a single pass over the input, advancing one digit per cycle with a fixed amount of state.
 
 
-
-
 <a name="day-4"></a>
 ### Day 4
 
@@ -285,8 +281,6 @@ The computation proceeds by repeatedly scanning the grid using a sliding 3×3 wi
 The algorithm runs iteratively. The first full scan records the number of removed cells for part 1. Subsequent scans continue updating the grid until no further removals occur, accumulating the total number of removed cells across all passes for part 2. The grid state alternates between two buffers between passes.
 
 During each scan, one packed word is processed per cycle. The design is parameterised by grid dimensions and processing width.
-
-
 
 <a name="day-5"></a>
 ### Day 5
@@ -307,8 +301,6 @@ For part 1, each item is tested against the merged ranges. Items and ranges are 
 
 The entire computation is performed without sorting in hardware, relying instead on the problem’s ordering guarantees. All memory accesses are sequential, and the design uses a small finite-state machine to coordinate merge, flush, and query phases.
 
-
-
 <a name="day-6"></a>
 ### Day 6
 
@@ -325,8 +317,6 @@ The input is parsed directly from RAM as a byte stream. Each expression begins w
 For part 1 and part 2, the same datapath is reused, with a phase flag selecting which stream of expressions contributes to which result. A zero count acts as a delimiter between the two phases.
 
 The design avoids buffering entire expressions. Instead, each value is folded into an accumulator as soon as it is decoded, allowing the computation to proceed in a single pass with minimal state. Final results are emitted once the end-of-stream delimiter is encountered.
-
-
 
 <a name="day-8"></a>
 ### Day 8
@@ -347,8 +337,6 @@ For part 2, the final edge that completes the spanning tree is detected directly
 
 The entire computation is performed as a single pass over the edge stream, with no buffering or sorting in hardware. All memory access patterns are explicit and deterministic, and the design cleanly separates load, union–find traversal, and result extraction.
 
-
-
 <a name="day-9"></a>
 ### Day 9, Part 1
 
@@ -358,13 +346,18 @@ The entire computation is performed as a single pass over the edge stream, with 
 <a href="https://adventofcode.com/2025/day/9"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
 </p>
 
-This design computes the largest axis-aligned rectangle defined by two points in a set of integer coordinates.
+This design evaluates all unordered pairs of points in a two-dimensional grid and computes two independent area metrics derived from each pair.
 
-All points are loaded into RAM as (x, y) pairs. The design performs a double nested iteration over point pairs (A, B), computing the inclusive rectangle area defined by their Manhattan extents. Absolute differences are computed combinationally, and the resulting width and height are multiplied to form a 128-bit area value.
+All input data is streamed into RAM over UART as 32-bit words. The input layout consists of a header region followed by a list of point records and a precomputed weighted prefix-sum grid. The prefix-sum grid enables constant-time rectangular queries during the pairwise evaluation phase. Due to the size of this grid, the implementation uses a large RAM configuration intended for simulation rather than synthesis on the target ULX3S device.
 
-A running maximum is maintained across all pairs. The nested iteration is implemented using two counters and a small FSM, ensuring each unique pair is evaluated exactly once.
+For part 1, the design computes the maximum axis-aligned rectangle area defined by any pair of points. For each pair (𝑖,𝑗), the absolute differences in 
+𝑥 and 𝑦 coordinates are computed combinationally, expanded to inclusive extents, and multiplied to obtain the rectangle area. A running maximum is maintained across all evaluated pairs.
 
-Although the algorithm is quadratic in the number of points, it maps cleanly to hardware due to its regular memory access pattern and simple arithmetic. The final maximum area is emitted once all pairs have been processed.
+For part 2, the same pairwise traversal is reused, but each candidate rectangle is additionally validated against the prefix-sum grid. For a given pair, the circuit determines the bounding box in grid coordinates and performs four prefix-sum reads corresponding to the corners of the rectangle. These values are combined using the inclusion–exclusion rule to compute the total weight contained within the rectangle. The rectangle is considered valid if this accumulated sum exactly matches the geometric area computed for part 1. Among all valid rectangles, the maximum area is tracked as the part-2 result.
+
+The nested pair traversal is implemented as a two-level FSM over indices 𝑖 and 𝑗, with explicit staging for RAM reads. All memory accesses follow a strict read–consume pattern: addresses are issued in one state and data is consumed in the following state to respect synchronous RAM timing. Dual-port RAM is used to allow simultaneous access to point data and prefix-sum entries without stalling the traversal.
+
+Both parts share the same datapath and control structure; part 2 extends the computation by inserting a short prefix-sum evaluation micro-sequence after each pair is formed. Final results for part 1 and part 2 are emitted once all point pairs have been processed.
 
 <a name="day-10"></a>
 ### Day 10 Part 1
@@ -401,8 +394,6 @@ For part 1, the circuit performs a forward propagation starting from you, accumu
 For part 2, the same propagation engine is reused across a fixed set of source–target runs (e.g. svr→fft, fft→dac, dac→out). Before each run, node counts are reset in RAM with only the start node seeded. Each traversal captures the final count at the target node. The required result is then formed by combining these captured values with a small number of 64-bit multiplications and additions.
 
 RAM accesses are explicitly staged: addresses are issued in one state and consumed the next, with a dual-port RAM allowing simultaneous read and write during propagation. A single FSM sequences header decode, per-run reset, traversal, capture, and final computation. Both part 1 and part 2 results are emitted once all runs complete.
-
-
 
 <a name="day-12"></a>
 ### Day 12
