@@ -69,7 +69,7 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 
 </div>
 
-Prior to this project, I had not used Hardcaml or written a full RTL design in any HDL. This repository documents that learning process through complete, working designs rather than minimal examples, with an emphasis on correctness, determinism, and realistic hardware interfaces.
+Prior to this project, I had not used Hardcaml or written a full RTL design in any HDL. This repository documents that learning process through complete, working designs rather than minimal examples.
 
 
 <a name="intro"></a>
