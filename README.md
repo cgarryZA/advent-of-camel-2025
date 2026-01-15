@@ -15,21 +15,22 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 ### Contents
 <p align="center">
   <a href="#intro">
-    <img src="https://img.shields.io/badge/Introduction-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Introduction%C2%A0%C2%A0%C2%A0%C2%A0-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#setup">
-    <img src="https://img.shields.io/badge/Setup_Guide-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Setup_Guide%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#execution-model">
-    <img src="https://img.shields.io/badge/Execution_Model-22c55e?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Execution_Model%C2%A0-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#solutions">
     <img src="https://img.shields.io/badge/Solutions_Section-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#about">
-    <img src="https://img.shields.io/badge/About_Me-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/About_Me%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0-1f6feb?style=for-the-badge">
   </a>
 </p>
+
 
 ### Related Links
 
