@@ -192,20 +192,20 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 <!-- Calendar-style grid -->
 <table align="center">
 <tr>
-  <td><a href="#day-1"><img src="https://img.shields.io/badge/01-Done-22c55e"></a></td>
-  <td><a href="#day-2"><img src="https://img.shields.io/badge/02-Done-22c55e"></a></td>
-  <td><a href="#day-3"><img src="https://img.shields.io/badge/03-Done-22c55e"></a></td>
+  <td><a href="docs/day01.md"><img src="https://img.shields.io/badge/01-Done-22c55e"></a></td>
+  <td><a href="docs/day02.md"><img src="https://img.shields.io/badge/02-Done-22c55e"></a></td>
+  <td><a href="docs/day03.md"><img src="https://img.shields.io/badge/03-Done-22c55e"></a></td>
   <td><a href="#day-4"><img src="https://img.shields.io/badge/04-Done-22c55e"></a></td>
-  <td><a href="#day-5"><img src="https://img.shields.io/badge/05-Done-22c55e"></a></td>
+  <td><a href="docs/day05.md"><img src="https://img.shields.io/badge/05-Done-22c55e"></a></td>
   <td><a href="#day-6"><img src="https://img.shields.io/badge/06-Done-22c55e"></a></td>
 </tr>
 
 <tr>
   <td><a href="#solutions"><img src="https://img.shields.io/badge/07-Pending-3f3f46"></td>
-  <td><a href="#day-8"><img src="https://img.shields.io/badge/08-Done-22c55e"></a></td>
-  <td><a href="#day-9"><img src="https://img.shields.io/badge/09-Done-22c55e"></a></td>
-  <td><a href="#day-10"><img src="https://img.shields.io/badge/10-Done-22c55e"></a></td>
-  <td><a href="#day-11"><img src="https://img.shields.io/badge/11-Done-22c55e"></a></td>
+  <td><a href="docs/day08.md"><img src="https://img.shields.io/badge/08-Done-22c55e"></a></td>
+  <td><a href="docs/day09.md"><img src="https://img.shields.io/badge/09-Done-22c55e"></a></td>
+  <td><a href="docs/day10.md"><img src="https://img.shields.io/badge/10-Done-22c55e"></a></td>
+  <td><a href="docs/day11.md"><img src="https://img.shields.io/badge/11-Done-22c55e"></a></td>
   <td><a href="#solutions"><img src="https://img.shields.io/badge/12-Pending-3f3f46"></td>
 </tr>
 </table>
