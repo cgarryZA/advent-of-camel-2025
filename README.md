@@ -47,7 +47,7 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
   </a>&nbsp;&nbsp;
 
   <a href="https://blog.janestreet.com/advent-of-fpga-challenge-2025/">
-    <img src="https://img.shields.io/badge/Challenge-Advent_of_FPGA-facc15?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Challenge-Advent_of_FPGA-0ea5e9?style=for-the-badge">
   </a>
 </p>
 
