@@ -167,8 +167,6 @@ and tell you exactly where to save it:
 
 `/inputs/inputX.txt`
 
----
-
 <a name="execution-model"></a>
 ## Execution Model
 <a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
@@ -176,7 +174,6 @@ and tell you exactly where to save it:
 All designs process their inputs as UART streams and produce their outputs over UART.  
 Each solution follows a deterministic **load–compute–report** structure: input data is received and prepared for processing, the problem-specific algorithm is executed in hardware, and the final results for part 1 and part 2 are formatted as decimal values and transmitted once computation completes.
 
----
 <a name="solutions"></a>
 
 ## Solutions 
@@ -213,8 +210,6 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 
 </div>
 
----
-
 <a name="day-1"></a>
 ### Day 1, Part 1 + Part 2
 
@@ -232,7 +227,6 @@ For part 2, the design analytically determines how many times the lock passes th
 
 Instructions are processed sequentially at a rate of one per cycle, and the per-instruction contributions are accumulated to produce the final results.
 
----
 <a name="day-2"></a>
 ### Day 2, Part 1 + Part 2
 
@@ -250,7 +244,7 @@ For part 1, the circuit checks whether an ID consists of exactly two identical h
 
 The design avoids per-digit iteration in the main loop. All candidates are evaluated in a single pass, with one ID tested per cycle. Valid IDs contribute their numeric value to the corresponding accumulator. The final sums for part 1 and part 2 are emitted once all ranges have been processed.
 
----
+
 
 <a name="day-3"></a>
 ### Day 3, Part 1 + Part 2
@@ -270,7 +264,7 @@ When a line boundary is encountered, the candidates corresponding to sequence le
 The computation proceeds in a single pass over the input, advancing one digit per cycle with a fixed amount of state.
 
 
----
+
 
 <a name="day-4"></a>
 ### Day 4, Part 1 + Part 2
@@ -289,7 +283,7 @@ The algorithm runs iteratively. The first full scan records the number of remove
 
 During each scan, one packed word is processed per cycle. The design is parameterised by grid dimensions and processing width.
 
----
+
 
 <a name="day-5"></a>
 ### Day 5, Part 1 + Part 2
@@ -310,7 +304,7 @@ For part 1, each item is tested against the merged ranges. Items and ranges are 
 
 The entire computation is performed without sorting in hardware, relying instead on the problem’s ordering guarantees. All memory accesses are sequential, and the design uses a small finite-state machine to coordinate merge, flush, and query phases.
 
----
+
 
 <a name="day-6"></a>
 ### Day 6, Part 1 + Part 2
@@ -329,7 +323,7 @@ For part 1 and part 2, the same datapath is reused, with a phase flag selecting 
 
 The design avoids buffering entire expressions. Instead, each value is folded into an accumulator as soon as it is decoded, allowing the computation to proceed in a single pass with minimal state. Final results are emitted once the end-of-stream delimiter is encountered.
 
----
+
 
 <a name="day-8"></a>
 ### Day 8, Part 1 + Part 2
@@ -350,7 +344,7 @@ For part 2, the final edge that completes the spanning tree is detected directly
 
 The entire computation is performed as a single pass over the edge stream, with no buffering or sorting in hardware. All memory access patterns are explicit and deterministic, and the design cleanly separates load, union–find traversal, and result extraction.
 
----
+
 
 <a name="day-9"></a>
 ### Day 9, Part 1
