@@ -21,13 +21,13 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
     <img src="https://img.shields.io/badge/Setup_Guide-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#execution-model">
-    <img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Execution_Model-22c55e?style=for-the-badge">
   </a><br/>
   <a href="#solutions">
-    <img src="https://img.shields.io/badge/Solutions-Section-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Solutions_Section-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#about">
-    <img src="https://img.shields.io/badge/About-Me-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/About_Me-1f6feb?style=for-the-badge">
   </a>
 </p>
 
