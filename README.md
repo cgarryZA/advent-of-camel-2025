@@ -209,14 +209,6 @@ Each solution follows a deterministic **load–compute–report** structure: inp
   <td><a href="#solutions"><img src="https://img.shields.io/badge/12-Pending-3f3f46"></td>
 </tr>
 
-<tr>
-<td><b>Day 12</b></td>
-<td>
-<a href="#day-12"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day12.ml"><img src="https://img.shields.io/badge/Code-day12.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/12"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
 </table>
 
 </div>
