@@ -102,6 +102,7 @@ If you attempt to run a day without its input present, the runner will print the
 
 <a name="execution-model"></a>
 ## Execution Model
+<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 All designs process their inputs as UART streams and produce their outputs over UART.  
 Each solution follows a deterministic **load–compute–report** structure: input data is received and prepared for processing, the problem-specific algorithm is executed in hardware, and the final results for part 1 and part 2 are formatted as decimal values and transmitted once computation completes.
@@ -336,6 +337,7 @@ For part 2, the same propagation engine is reused across a fixed set of source�
 RAM accesses are explicitly staged: addresses are issued in one state and consumed the next, with a dual-port RAM allowing simultaneous read and write during propagation. A single FSM sequences header decode, per-run reset, traversal, capture, and final computation. Both part 1 and part 2 results are emitted once all runs complete.
 
 ## About Me
+<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 I’m Christian Garry, a Graduate Communications Engineer at Siemens and an MSc student in **Scientific Computing and Data Analysis** at Durham University. I previously completed an **MEng in Electronic Engineering** at Durham.
 
