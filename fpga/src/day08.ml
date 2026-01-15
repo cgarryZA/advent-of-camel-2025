@@ -300,8 +300,7 @@ let algo
             ])
 
         ; (Xs_write,
-            [ (* actual RAM write is driven combinationally; just advance counters *)
-              xs_word     <--. 0
+            [ xs_word     <--. 0
             ; xs_word_idx <-- xs_word_idx.value +:. 1
             ; sm.set_next Xs_wait
             ])

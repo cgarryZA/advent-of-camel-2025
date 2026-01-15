@@ -67,21 +67,17 @@ module Loader = struct
     let we = word_in.valid &: ~:(loaded.value) &: ~:(overflow.value) in
 
     compile
-      [ (* Advance address, saturating at max_addr, and latch overflow
-           *after* successfully writing the last word. *)
-        when_ we
+      [ when_ we
           [ if_
               (word_count.value ==: max_addr)
               [ overflow <-- vdd ]
               [ word_count <-- word_count.value +:. 1 ]
           ]
 
-      ; (* End-of-load: sticky *)
-        when_ uart_rts
+      ; when_ uart_rts
           [ loaded <-- vdd ]
       ];
 
-    (* data_words is informational; it’s not used by the algo. Keep it stable. *)
     let data_words = Variable.reg spec ~width:addr_bits in
     compile
       [ when_ uart_rts
@@ -96,7 +92,6 @@ module Loader = struct
         ; write_enable = we
         }
     ; data_words    = data_words.value
-      (* CRITICAL: ignore overflow for uart_rx_ready so the sender can finish and assert RTS. *)
     ; uart_rx_ready = ~:(loaded.value)
     ; overflow      = overflow.value
     }

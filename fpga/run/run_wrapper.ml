@@ -7,6 +7,37 @@ open! Hardcaml
 module Ulx3s = Advent_of_caml.Ulx3s
 module Sim = Cyclesim.With_interface (Ulx3s.I) (Ulx3s.O)
 
+module Results = struct
+  type entry =
+    { part1 : string option
+    ; part2 : string option
+    }
+
+  let table : (int, entry) Hashtbl.t = Hashtbl.create (module Int)
+
+  let update ~day ~part1 ~part2 =
+    Hashtbl.set table ~key:day ~data:{ part1; part2 }
+
+  let to_json () =
+    let entries =
+      Hashtbl.to_alist table
+      |> List.sort ~compare:(fun (a, _) (b, _) -> Int.compare a b)
+      |> List.map ~f:(fun (day, { part1; part2 }) ->
+           let field name = function
+             | None -> "null"
+             | Some v -> v
+           in
+           sprintf
+             {|  "%d": { "part1": %s, "part2": %s }|}
+             day
+             (field "part1" part1)
+             (field "part2" part2))
+    in
+    "{\n"
+    ^ String.concat ~sep:",\n" entries
+    ^ "\n}\n"
+end
+
 (* ---------- Colours ---------- *)
 module Color = struct
   let reset  = "\027[0m"
@@ -121,6 +152,23 @@ let feed_inputs t xs =
 
 let get_uart_output t =
   Queue.to_list t.recv_buffer |> String.of_char_list
+;;
+
+let extract_parts (output : string) =
+  let part1 = ref None in
+  let part2 = ref None in
+
+  output
+  |> String.split_lines
+  |> List.iter ~f:(fun line ->
+       match String.strip line with
+       | s when String.is_prefix s ~prefix:"Part 1:" ->
+           part1 := Some (String.strip (String.drop_prefix s 7))
+       | s when String.is_prefix s ~prefix:"Part 2:" ->
+           part2 := Some (String.strip (String.drop_prefix s 7))
+       | _ -> ());
+
+  (!part1, !part2)
 ;;
 
 let dune_project_root () =
@@ -257,6 +305,9 @@ let run_day
 
   let output = get_uart_output sim in
 
+  let p1, p2 = extract_parts output in
+  Results.update ~day ~part1:p1 ~part2:p2;
+
   let coloured =
     output
     |> String.split_lines
@@ -277,4 +328,11 @@ let run_day
   in
 
   print_endline coloured
+;;
+
+let () =
+  Core.at_exit (fun () ->
+    let path = "inputs/outputs.json" in
+    let json = Results.to_json () in
+    Out_channel.write_all path ~data:json)
 ;;
