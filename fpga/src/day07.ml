@@ -696,20 +696,19 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
 
           ; when_ (~:vis_rd)
               [ (* mark visited always *)
-                vis_addr  <-- s0_id.value
+                vis_addr  <-- s1_id.value
               ; vis_wdata <-- vdd
               ; vis_we    <-- vdd
               ]
 
-          ; when_ (~:vis_rd &: (s0_r.value <>: loader.height))
+          ; when_ (~:vis_rd &: (s1_r.value <>: loader.height))
               [ (* enqueue only if NOT exit row *)
                 q_addr  <-- q_tail.value
-              ; q_wdata <-- concat_msb [ s0_r.value; s0_c.value ]
+              ; q_wdata <-- concat_msb [ s1_r.value; s1_c.value ]
               ; q_we    <-- vdd
               ; q_tail  <-- q_tail.value +:. 1
               ; q_cnt   <-- q_cnt.value +:. 1
               ]
-
 
           ; sm.set_next QRead
           ]
@@ -749,8 +748,9 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ]
 
         ; TopoEdgeRead,
-          [ (* wait 1 cycle for Edge_ram read *)
-            sm.set_next TopoEdgeGot
+          [ (* HOLD the edge address during the wait cycle *)
+            edge_addr <-- topo_u.value
+          ; sm.set_next TopoEdgeGot
           ]
 
         ; TopoEdgeGot,
@@ -771,8 +771,9 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ]
 
         ; TopoS0_IndegRead,
-          [ (* wait 1 cycle for indeg_rd *)
-            sm.set_next TopoS0_Commit
+          [ (* HOLD indeg address during the wait cycle *)
+            indeg_addr <-- s0_id.value
+          ; sm.set_next TopoS0_Commit
           ]
 
         ; TopoS0_Commit,
@@ -801,8 +802,9 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ]
 
         ; TopoS1_IndegRead,
-          [ (* wait 1 cycle for indeg_rd *)
-            sm.set_next TopoS1_Commit
+          [ (* HOLD indeg address during the wait cycle *)
+            indeg_addr <-- s1_id.value
+          ; sm.set_next TopoS1_Commit
           ]
         ; TopoS1_Commit,
           [ indeg_addr  <-- s1_id.value
@@ -839,8 +841,9 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ]
 
         ; DpEdgeRead,
-          [ (* wait 1 cycle for Edge_ram read *)
-            sm.set_next DpEdgeGot
+          [ (* HOLD edge address during the wait cycle *)
+            edge_addr <-- dp_u.value
+          ; sm.set_next DpEdgeGot
           ]
         ; DpEdgeGot,
           [ s0_id    <-- edge_s0_id
