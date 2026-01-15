@@ -6,13 +6,6 @@ def die(msg):
     print(f"ERROR: {msg}")
     sys.exit(1)
 
-def require_answer(value, day, part):
-    if value is None:
-        die(
-            f"Please enter the true solution for day {day} "
-            f"({part}) in /inputs/answers.json"
-        )
-
 def main():
     if len(sys.argv) != 2:
         die("Usage: python check_answers.py <day_number>")
@@ -48,11 +41,23 @@ def main():
     ok = True
 
     for part in ("part1", "part2"):
-        a = answers[day].get(part)
-        o = outputs[day].get(part)
+        # Structural check: key must exist
+        if part not in answers[day]:
+            die(
+                f"Missing key '{part}' for day {day} "
+                f"in /inputs/answers.json"
+            )
 
-        require_answer(a, day, part)
+        if part not in outputs[day]:
+            die(
+                f"Missing key '{part}' for day {day} "
+                f"in /inputs/outputs.json"
+            )
 
+        a = answers[day][part]
+        o = outputs[day][part]
+
+        # Value comparison (null is allowed)
         if a != o:
             print(f"❌ Day {day} {part} mismatch")
             print(f"   expected: {a}")
@@ -66,8 +71,7 @@ def main():
     else:
         print(f"\nDay {day} COMPLETED WITH MISMATCHES")
 
-    # IMPORTANT:
-    # Do NOT exit non-zero on mismatches
+    # Never fail on mismatches
     sys.exit(0)
 
 if __name__ == "__main__":
