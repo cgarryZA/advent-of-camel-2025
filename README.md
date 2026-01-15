@@ -403,6 +403,6 @@ You can find more about my work here:
     <img src="https://img.shields.io/badge/LinkedIn-Christian_Garry-0A66C2?style=for-the-badge&logo=linkedin">
   </a>
   <a href="https://christiangarry.com">
-    <img src="https://img.shields.io/badge/Website-christiangarry.com-111827?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Website-christiangarry.com-22c55e?style=for-the-badge">
   </a>
 </div>
