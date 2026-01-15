@@ -391,13 +391,17 @@ For part 2, the same propagation engine is reused across a fixed set of source�
 
 RAM accesses are explicitly staged: addresses are issued in one state and consumed the next, with a dual-port RAM allowing simultaneous read and write during propagation. A single FSM sequences header decode, per-run reset, traversal, capture, and final computation. Both part 1 and part 2 results are emitted once all runs complete.
 
+## About Me
+
 ## About
 
-I’m Christian Garry, currently completing a Master’s degree in **Scientific Computing and Data Analysis**, with a background in electronic engineering and a strong focus on **hardware-aware computation**, **deterministic systems**, and **quantitative problem-solving**.
+## About
 
-This repository reflects my interest in treating algorithmic problems as *hardware systems*: explicit state machines, cycle-accurate memory access, and streaming I/O protocols, rather than abstract software control flow. My broader interests include high-performance computing, numerical methods, and quantitative research.
+I’m Christian Garry, a Graduate Communications Engineer at Siemens and an MSc student in **Scientific Computing and Data Analysis** at Durham University. I previously completed an **MEng in Electronic Engineering** at Durham.
 
-You can find more about my work here:
+This repository reflects how I tend to approach problems: decomposing them into small, well-defined components with explicit interfaces, then composing those components into complete systems.
+
+You can find more about my work and background here:
 <div align="center">
   <a href="https://www.linkedin.com/in/christian-tt-garry/">
     <img src="https://img.shields.io/badge/LinkedIn-Christian_Garry-0A66C2?style=for-the-badge&logo=linkedin">
@@ -406,3 +410,4 @@ You can find more about my work here:
     <img src="https://img.shields.io/badge/Website-christiangarry.com-22c55e?style=for-the-badge">
   </a>
 </div>
+
