@@ -79,8 +79,6 @@ This repository contains synthesizable FPGA implementations of selected [Advent 
 
 This project is based on the [Jane Street Hardcaml Template Project](https://github.com/janestreet/hardcaml_template_project/tree/with-extensions), with the structure and UART infrastructure rebuilt and updated from the [2024 Advent of Hardcaml](https://github.com/asinghani/advent-of-hardcaml-2024/) designs to match current versions of Hardcaml and dune.
 
-I've started with AoC days that had solutions that seemed like they would map well to hardware implementations and will see how many I can finish before the deadline.
-
 <p align="center">
   <img
     src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/Animation.gif"
@@ -88,6 +86,8 @@ I've started with AoC days that had solutions that seemed like they would map we
     width="560"
   />
 </p>
+
+I've started with AoC days that had solutions that seemed like they would map well to hardware implementations and will see how many I can finish before the deadline.
 
 
 <a name="setup"></a>
