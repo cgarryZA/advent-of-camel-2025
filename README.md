@@ -2,7 +2,6 @@
 
 <p align="center">
   <a href="#solutions"><img src="https://img.shields.io/badge/Solutions-View-1f6feb?style=for-the-badge"></a>
-  <a href="#execution-model"><img src="https://img.shields.io/badge/Architecture-Execution_Model-8b949e?style=for-the-badge"></a>
   <a href="fpga/src"><img src="https://img.shields.io/badge/Code-Browse-f85149?style=for-the-badge"></a>
   <a href="https://adventofcode.com/2025"><img src="https://img.shields.io/badge/AoC_2025-Problems-facc15?style=for-the-badge"></a>
   <a href="#execution-model"><img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge"></a>
