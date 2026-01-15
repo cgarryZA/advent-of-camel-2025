@@ -11,14 +11,25 @@
 
 A hardware-first exploration of Advent of Code 2025, implementing each puzzle as a **cycle-accurate FPGA design** in **Hardcaml**, using streaming UART I/O, explicit memory pipelines, and finite-state schedulers instead of software control flow.
 
-  <a href="#solutions"><img src="https://img.shields.io/badge/Solutions-View-1f6feb?style=for-the-badge"></a>
+<a name="internal-nav"></a>
+### Readme Links
+  <a href="#intro"><img src="https://img.shields.io/badge/Introduction-1f6feb?style=for-the-badge"></a>
+  <a href="#setup"><img src="https://img.shields.io/badge/Setup-and-Installation-Instructions-1f6feb?style=for-the-badge"></a>
+  <a href="#execution-model"><img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge"></a>
+  <a href="#solutions"><img src="https://img.shields.io/badge/Solutions-Section-1f6feb?style=for-the-badge"></a>
+  <a href="#about"><img src="https://img.shields.io/badge/About-Me-1f6feb?style=for-the-badge"></a>
+  
+### External Links
+
   <a href="fpga/src"><img src="https://img.shields.io/badge/Code-Browse-f85149?style=for-the-badge"></a>
   <a href="https://adventofcode.com/2025"><img src="https://img.shields.io/badge/AoC_2025-Problems-facc15?style=for-the-badge"></a>
-  <a href="#execution-model"><img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge"></a>
 
 </div>
 
+
+<a name="intro"></a>
 ## Introduction
+<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 This repository contains synthesizable FPGA implementations of selected [Advent of Code 2025](https://adventofcode.com/) problems, targeting streaming execution on the ULX3S platform for the [Advent of FPGA Challenge](https://blog.janestreet.com/advent-of-fpga-challenge-2025/).
 
@@ -26,7 +37,9 @@ This project is based on the [Jane Street Hardcaml Template Project](https://git
 
 I've started with AoC days that had solutions that seemed like they would map well to hardware implementations and will see how many I can finish before the deadline.
 
+<a name="setup"></a>
 ## Setup & Installation
+<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 ### Prerequisites
 
@@ -102,7 +115,7 @@ If you attempt to run a day without its input present, the runner will print the
 
 <a name="execution-model"></a>
 ## Execution Model
-<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 All designs process their inputs as UART streams and produce their outputs over UART.  
 Each solution follows a deterministic **load–compute–report** structure: input data is received and prepared for processing, the problem-specific algorithm is executed in hardware, and the final results for part 1 and part 2 are formatted as decimal values and transmitted once computation completes.
@@ -111,7 +124,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 <a name="solutions"></a>
 
 ## Solutions 
-<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 <div align="center">
 
 <!-- Calendar GIF -->
@@ -336,8 +349,9 @@ For part 2, the same propagation engine is reused across a fixed set of source�
 
 RAM accesses are explicitly staged: addresses are issued in one state and consumed the next, with a dual-port RAM allowing simultaneous read and write during propagation. A single FSM sequences header decode, per-run reset, traversal, capture, and final computation. Both part 1 and part 2 results are emitted once all runs complete.
 
+<a name="intro"></a>
 ## About Me
-<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 I’m Christian Garry, a Graduate Communications Engineer at Siemens and an MSc student in **Scientific Computing and Data Analysis** at Durham University. I previously completed an **MEng in Electronic Engineering** at Durham.
 
