@@ -225,9 +225,9 @@ let algo
   let ps_c      = Variable.reg spec ~width:64 in
   let ps_d      = Variable.reg spec ~width:64 in
 
-  (* Done pulse for Print_decimal_outputs *)
-  let done_seen  = Variable.reg spec ~width:1 in
-  let done_pulse = sm.is Done &: ~:(done_seen.value) in
+  let done_pending = Variable.reg spec ~width:1 in
+  let done_out     = reg spec done_pending.value in
+
 
   (* ---------------------------------------------------------- *)
   (* Helpers: address math                                       *)
@@ -325,7 +325,7 @@ let algo
                 @ p1_req (of_int_trunc ~width:addr_bits 0)
                 @ [ max_p1    <--. 0
                   ; max_p2    <--. 0
-                  ; done_seen <-- gnd
+                  ; done_pending <-- gnd
                   ; i_idx     <--. 0
                   ; j_idx     <--. 0
                   ; sm.set_next Magic_read
@@ -526,15 +526,14 @@ let algo
         ; ( Next_i
           , [ i_idx <-- i_idx.value +:. 1
             ; if_ ((i_idx.value +:. 1) >=: n_points.value)
-                [ sm.set_next Done ]
+                [ done_pending <-- vdd
+                ; sm.set_next Done ]
                 [ sm.set_next I_read_x ]
             ]
           )
 
         ; ( Done
-          , [ done_seen <-- vdd
-            ; sm.set_next Done
-            ]
+          , [ sm.set_next Done ]
           )
         ]
     ];
@@ -544,8 +543,8 @@ let algo
   , p1_addr.value
   , max_p1.value
   , max_p2.value
-  , done_pulse
-  , done_pulse
+  , done_out
+  , done_out
   )
 ;;
 
