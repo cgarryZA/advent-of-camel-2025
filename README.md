@@ -80,6 +80,8 @@ This repository contains synthesizable FPGA implementations of selected [Advent 
 
 This project is based on the [Jane Street Hardcaml Template Project](https://github.com/janestreet/hardcaml_template_project/tree/with-extensions), with the structure and UART infrastructure rebuilt and updated from the [2024 Advent of Hardcaml](https://github.com/asinghani/advent-of-hardcaml-2024/) designs to match current versions of Hardcaml and dune.
 
+This repository contains solutions for each day of AoC bar day 7, and day 10 part 2.
+
 <br>
 <p align="center">
   <img
