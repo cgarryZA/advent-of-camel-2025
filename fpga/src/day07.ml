@@ -204,6 +204,10 @@ module States = struct
     | Succ1_Read
     | Succ1_Commit
     | TopoInit
+    | TopoScanRead
+    | TopoScanCheck
+    | TopoScanAppend
+    | TopoScanAdvance
     | TopoRead
     | TopoGot
     | TopoEdgeGot
@@ -376,6 +380,8 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   let dp_w1  = Variable.reg spec ~width:60 in
 
   let start_id = Variable.reg spec ~width:14 in
+
+  let scan_id = Variable.reg spec ~width:14 in
 
   (* ====================== Port wires (combinational) ====================== *)
 
@@ -697,17 +703,48 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next QRead
           ]
 
-        ; TopoInit,
+       ; TopoInit,
           [ topo_head <--. 0
-          ; topo_tail <--. 1
-          ; topo_cnt  <--. 1
+          ; topo_tail <--. 0
+          ; topo_cnt  <--. 0
 
-          ; topo_addr1  <--. 0
-          ; topo_wdata1 <-- start_id.value
+          ; scan_id <--. 0
+          ; sm.set_next TopoScanRead
+          ]
+
+        ; TopoScanRead,
+          [ indeg_addr <-- scan_id.value
+          ; vis_addr   <-- scan_id.value
+          ; sm.set_next TopoScanCheck
+          ]
+          
+        ; TopoScanCheck,
+          [ when_ (vis_rd &: (indeg_rd ==:. 0))
+              [ sm.set_next TopoScanAppend ]
+          ; when_ (~:(vis_rd &: (indeg_rd ==:. 0)))
+              [ sm.set_next TopoScanAdvance ]
+          ]
+
+        ; TopoScanAppend,
+          [ topo_addr1  <-- topo_tail.value
+          ; topo_wdata1 <-- scan_id.value
           ; topo_we1    <-- vdd
 
-          ; sm.set_next TopoRead
+          ; topo_tail <-- topo_tail.value +:. 1
+          ; topo_cnt  <-- topo_cnt.value  +:. 1
+
+          ; sm.set_next TopoScanAdvance
           ]
+
+        ; TopoScanAdvance,
+          [ when_ (scan_id.value ==: (exit_base14 +: loader.width -:. 1))
+              [ sm.set_next TopoRead ]
+          ; when_ (scan_id.value <>: (exit_base14 +: loader.width -:. 1))
+              [ scan_id <-- scan_id.value +:. 1
+              ; sm.set_next TopoScanRead
+              ]
+          ]
+
 
         ; TopoRead,
           [ when_ topo_done [ sm.set_next DpInit ]

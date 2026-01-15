@@ -137,7 +137,6 @@ module States = struct
     | J_consume_idx
 
     | Pair_compute
-    | Ps_setup
     | Ps_lo_read
     | Ps_lo_consume
     | Ps_hi_read
@@ -210,6 +209,8 @@ let algo
   (* Output valids (sticky) *)
   let p1_valid = Variable.reg spec ~width:1 in
   let p2_valid = Variable.reg spec ~width:1 in
+
+  let done_seen = Variable.reg spec ~width:1 in
 
   (* ---------------------------------------------------------- *)
   (* Helpers: address math                                       *)
@@ -542,11 +543,10 @@ let algo
           )
 
         ; ( Done
-          , [ (* fire valids once *)
-              when_ (p1_valid.value ==:. 0)
-                [ p1_valid <-- vdd
-                ; p2_valid <-- vdd
-                ]
+          , [ p1_valid <-- ~:(done_seen.value)
+            ; p2_valid <-- ~:(done_seen.value)
+            ; done_seen <-- vdd
+            ; sm.set_next Done
             ]
           )
         ]
