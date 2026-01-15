@@ -53,7 +53,7 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 
 <p align="center">
   <a href="https://github.com/janestreet/hardcaml_template_project/tree/with-extensions">
-    <img src="https://img.shields.io/badge/Template_Code-64748b?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Jane_Street-Template-64748b?style=for-the-badge">
   </a>&nbsp;&nbsp;
 
   <a href="https://github.com/asinghani/advent-of-hardcaml-2024/">
