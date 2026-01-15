@@ -152,7 +152,6 @@ module Loader = struct
     let assembled_u16 = concat_msb [ uart_rx.value; tmp_lo.value ] in
     let assembled_u14 = uresize ~width:14 assembled_u16 in
 
-    (* Counts bytes in grid payload only (after headers). *)
     let write_addr =
       reg_fb spec ~width:14
         ~enable:(uart_rx.valid &: phase.is Load_grid &: ~:(loaded.value))
@@ -322,13 +321,14 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   in
 
   (* node_id for rows 0..height inclusive:
-     id = r*width + c (including exit row r==height) *)
+     id = r*width + c; exit row r==height maps to ids [exit_base .. exit_base+width-1] *)
   let exit_base14 =
     let h28 = uresize ~width:28 loader.height in
     let w28 = uresize ~width:28 loader.width in
     let prod = h28 *: w28 in
     uresize ~width:14 prod
   in
+
   let node_id_of_rc (r : Signal.t) (c : Signal.t) =
     let r28 = uresize ~width:28 r in
     let w28 = uresize ~width:28 loader.width in
@@ -341,17 +341,14 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
 
   (* ====================== Control regs ====================== *)
 
-  (* BFS queue pointers *)
   let q_head = Variable.reg spec ~width:14 in
   let q_tail = Variable.reg spec ~width:14 in
   let q_cnt  = Variable.reg spec ~width:15 in
 
-  (* current node (r,c) *)
-  let cur_r   = Variable.reg spec ~width:14 in
-  let cur_c   = Variable.reg spec ~width:14 in
-  let cur_id  = Variable.reg spec ~width:14 in
+  let cur_r  = Variable.reg spec ~width:14 in
+  let cur_c  = Variable.reg spec ~width:14 in
+  let cur_id = Variable.reg spec ~width:14 in
 
-  (* successors (r,c,id,valid) *)
   let s0_r     = Variable.reg spec ~width:14 in
   let s0_c     = Variable.reg spec ~width:14 in
   let s0_id    = Variable.reg spec ~width:14 in
@@ -362,27 +359,22 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   let s1_id    = Variable.reg spec ~width:14 in
   let s1_valid = Variable.reg spec ~width:1 in
 
-  (* Part outputs *)
-  let part1 = Variable.reg spec ~width:60 in
-  let part2 = Variable.reg spec ~width:60 in
+  let part1      = Variable.reg spec ~width:60 in
+  let part2      = Variable.reg spec ~width:60 in
   let done_level = Variable.reg spec ~width:1 in
   let done_pulse = Variable.reg spec ~width:1 in
 
-  (* Topo list pointers/counters *)
   let topo_head = Variable.reg spec ~width:14 in
   let topo_tail = Variable.reg spec ~width:14 in
   let topo_cnt  = Variable.reg spec ~width:14 in
 
-  (* topo current u and edge decode *)
   let topo_u = Variable.reg spec ~width:14 in
 
-  (* DP index and temporaries *)
-  let dp_idx  = Variable.reg spec ~width:14 in
-  let dp_u    = Variable.reg spec ~width:14 in
-  let dp_w0   = Variable.reg spec ~width:60 in
-  let dp_w1   = Variable.reg spec ~width:60 in
+  let dp_idx = Variable.reg spec ~width:14 in
+  let dp_u   = Variable.reg spec ~width:14 in
+  let dp_w0  = Variable.reg spec ~width:60 in
+  let dp_w1  = Variable.reg spec ~width:60 in
 
-  (* Remember start node id (start = (1, start_col) like python reference) *)
   let start_id = Variable.reg spec ~width:14 in
 
   (* ====================== Port wires (combinational) ====================== *)
@@ -432,72 +424,72 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
     { address = indeg_addr.value; write_data = indeg_wdata.value; write_enable = indeg_we.value };
 
   Topo_ram.Port.Of_signal.assign topo_ports.(0)
-    { address = topo_addr0.value; write_data = zero 14; write_enable = gnd };
+      { address = topo_addr0.value; write_data = zero 14; write_enable = gnd };
   Topo_ram.Port.Of_signal.assign topo_ports.(1)
-    { address = topo_addr1.value; write_data = topo_wdata1.value; write_enable = topo_we1.value };
+      { address = topo_addr1.value; write_data = topo_wdata1.value; write_enable = topo_we1.value };
 
   Ways_ram.Port.Of_signal.assign ways_ports.(0)
     { address = ways_addr.value; write_data = ways_wdata.value; write_enable = ways_we.value };
 
   (* ====================== Read data aliases ====================== *)
 
-  let grid_bit_rd   = grid.read_data.(0) in
-  let q_rd          = queue.read_data.(0) in
-  let vis_rd        = visited.read_data.(0) in
-  let indeg_rd      = indeg.read_data.(0) in
-  let edge_rd       = edges.read_data.(0) in
-  let topo_rd       = topo.read_data.(0) in
-  let ways_rd       = ways.read_data.(0) in
+  let grid_bit_rd = grid.read_data.(0) in
+  let q_rd        = queue.read_data.(0) in
+  let vis_rd      = visited.read_data.(0) in
+  let indeg_rd    = indeg.read_data.(0) in
+  let edge_rd     = edges.read_data.(0) in
+  let topo_rd     = topo.read_data.(0) in
+  let ways_rd     = ways.read_data.(0) in
 
-  (* Edge decode helpers *)
+  (* Edge decode *)
   let edge_s0_id    = select edge_rd ~high:13 ~low:0 in
   let edge_s1_id    = select edge_rd ~high:27 ~low:14 in
   let edge_s0_valid = select edge_rd ~high:28 ~low:28 in
   let edge_s1_valid = select edge_rd ~high:29 ~low:29 in
 
+  (* QGot convenience decode (from q_rd) *)
+  let q_r = select q_rd ~high:27 ~low:14 in
+  let q_c = select q_rd ~high:13 ~low:0 in
+
+  let q_is_exit = q_r ==: loader.height in
+  let q_id_exit = uresize ~width:14 (exit_base14 +: q_c) in
+  let q_id_norm = node_id_of_rc q_r q_c in
+  let q_cur_id  = mux2 q_is_exit q_id_norm q_id_exit in
+
   let queue_empty = q_cnt.value ==:. 0 in
   let topo_done   = topo_head.value ==: topo_cnt.value in
 
-  let left_ok  = c !=:. 0 in
-  let right_ok = c <: (loader.width -:. 1) in
-
-  let left_c  = c -:. 1 in
-  let right_c = c +:. 1 in
-
-  let down_r  = r +:. 1 in
-  let down_is_exit = down_r ==: loader.height in
-
-  let down_id =
-    mux2 down_is_exit
-      (uresize ~width:14 (exit_base14 +: c))
-      (node_id_of_rc down_r c)
-  in
-
-  let r = select q_rd ~high:27 ~low:14 in
-  let c = select q_rd ~high:13 ~low:0 in
-  let is_exit = r ==: loader.height in
-  let id_exit = exit_base14 +: c in
-  let id_norm = node_id_of_rc r c in
-
-  let is_split = grid_bit_rd in
-  let r = cur_r.value in
-  let c = cur_c.value in
-  let newv = indeg_rd -:. 1 in
-
-  let is_exit = dp_u.value >=: exit_base14 in
-  let val_u =
-    mux2 is_exit
+  (* DP convenience *)
+  let dp_u_is_exit = dp_u.value >=: exit_base14 in
+  let dp_val_u =
+    mux2 dp_u_is_exit
       (of_int_trunc ~width:60 1)
       (uresize ~width:60 (dp_w0.value +: dp_w1.value))
   in
-  
-  let is_exit = dp_u.value >=: exit_base14 in
+
+  (* build successors following Python reference *)
+  let is_split  = grid_bit_rd in
+  let r0        = cur_r.value in
+  let c0        = cur_c.value in
+  let left_ok   = c0 <>: of_int_trunc ~width:14 0 in
+  let right_ok  = c0 <: (loader.width -:. 1) in
+  let left_c    = c0 -:. 1 in
+  let right_c   = c0 +:. 1 in
+  let down_r    = r0 +:. 1 in
+  let down_exit = down_r ==: loader.height in
+  let down_id   =
+    mux2 down_exit
+      (uresize ~width:14 (exit_base14 +: c0))
+      (node_id_of_rc down_r c0)
+  in
+
+  let newv = indeg_rd -:. 1 in
             
 
   (* ====================== FSM ====================== *)
 
   compile
-    [ (* default port drives *)
+    [ (* defaults *)
       grid_read_addr <-- zero 14
 
     ; q_addr  <-- q_head.value
@@ -528,11 +520,9 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
     ; done_pulse <-- gnd
 
     ; sm.switch
-        [ (* -------------------- LOADING -------------------- *)
-          Loading,
+        [ Loading,
           [ when_ loader.load_finished
-              [ (* start = (1, start_col) *)
-                start_id <-- node_id_of_rc (of_int_trunc ~width:14 1) loader.start_col
+              [ start_id <-- node_id_of_rc (of_int_trunc ~width:14 1) loader.start_col
 
               ; q_head <--. 0
               ; q_tail <--. 0
@@ -550,7 +540,6 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
               ]
           ]
 
-        (* -------------------- INIT START (enqueue + mark visited) -------------------- *)
         ; Init_start,
           [ (* enqueue start rc *)
             q_addr  <--. 0
@@ -568,82 +557,73 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next QRead
           ]
 
-        (* -------------------- BFS: dequeue phase 0 (address) -------------------- *)
         ; QRead,
-          [ when_ queue_empty
-              [ sm.set_next TopoInit ]
+          [ when_ queue_empty [ sm.set_next TopoInit ]
           ; when_ (~:queue_empty)
               [ q_addr <-- q_head.value
               ; sm.set_next QGot
               ]
           ]
 
-        (* -------------------- BFS: dequeue phase 1 (consume) -------------------- *)
         ; QGot,
-          [ (* capture (r,c) from q_rd *)
-            cur_r <-- select q_rd ~high:27 ~low:14
-          ; cur_c <-- select q_rd ~high:13 ~low:0
+          [ (* capture rc *)
+            cur_r <-- q_r
+          ; cur_c <-- q_c
+          ; cur_id <-- q_cur_id
 
           ; (* pop queue *)
             q_head <-- q_head.value +:. 1
           ; q_cnt  <-- q_cnt.value  -:. 1
 
-          ; (* compute node_id (including exit row) *)
-            cur_id <-- mux2 is_exit id_norm (uresize ~width:14 id_exit)
-
-          ; (* clear succ valids (will be filled in CellEval) *)
-            s0_valid <-- gnd
+          ; s0_valid <-- gnd
           ; s1_valid <-- gnd
 
-          ; (* if exit node: record empty edge and go straight to Succ0_Read to skip *)
-            when_ (select q_rd ~high:27 ~low:14 ==: loader.height)
-              [ edge_addr  <-- cur_id.value
+          ; when_ q_is_exit
+              [ (* exit node => no outgoing edges *)
+                edge_addr  <-- q_cur_id
               ; edge_wdata <-- zero 32
               ; edge_we    <-- vdd
               ; sm.set_next Succ0_Read
               ]
 
-          ; (* otherwise, request grid bit for this cell *)
-            when_ (select q_rd ~high:27 ~low:14 !=: loader.height)
+          ; when_ (~:q_is_exit)
               [ sm.set_next CellAddr ]
           ]
 
-        (* -------------------- BFS: issue grid address for current cell -------------------- *)
         ; CellAddr,
           [ grid_read_addr <-- grid_addr cur_r.value cur_c.value
           ; sm.set_next CellEval
           ]
 
-        (* -------------------- BFS: evaluate cell and compute successors -------------------- *)
         ; CellEval,
-          [ (* Python semantics:
-               if splitter '^' => mark splitter reached (part1++), successors: (r,c-1) and (r,c+1) same row
-               else '.'         => successor: (r+1,c) (exit row allowed at r==height)
-           *)
-            (* defaults *)
+          [ (* defaults *)
             s0_valid <-- gnd
           ; s1_valid <-- gnd
 
-            (* splitter: part1++ *)
+            (* part1 counts distinct reachable splitters: visited guarantees once *)
           ; when_ is_split [ part1 <-- part1.value +:. 1 ]
 
-            (* select based on is_split *)
-            (* succ0 *)
-          ; s0_r  <-- mux2 is_split down_r r
-          ; s0_c  <-- mux2 is_split c left_c
-          ; s0_id <-- mux2 is_split down_id (node_id_of_rc r left_c)
-          ; s0_valid <-- mux2 is_split vdd (uresize ~width:1 left_ok)
+            (* if splitter: two sideways successors; else: fall down *)
+          ; when_ is_split
+              [ s0_r     <-- r0
+              ; s0_c     <-- left_c
+              ; s0_id    <-- node_id_of_rc r0 left_c
+              ; s0_valid <-- uresize ~width:1 left_ok
 
-            (* succ1 *)
-          ; s1_r  <-- r
-          ; s1_c  <-- right_c
-          ; s1_id <-- node_id_of_rc r right_c
-          ; s1_valid <-- mux2 is_split gnd (uresize ~width:1 right_ok)
+              ; s1_r     <-- r0
+              ; s1_c     <-- right_c
+              ; s1_id    <-- node_id_of_rc r0 right_c
+              ; s1_valid <-- uresize ~width:1 right_ok
+              ]
+          ; when_ (~:is_split)
+              [ s0_r     <-- down_r
+              ; s0_c     <-- c0
+              ; s0_id    <-- down_id
+              ; s0_valid <-- vdd
+              ; s1_valid <-- gnd
+              ]
 
-            (* If not splitter, only succ0=down is valid. *)
-          ; when_ (~:is_split) [ s0_valid <-- vdd; s1_valid <-- gnd ]
-
-            (* write edge table for this node_id *)
+            (* write edge table for cur_id *)
           ; edge_addr <-- cur_id.value
           ; edge_wdata <--
               concat_lsb
@@ -658,32 +638,26 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next Succ0_Read
           ]
 
-        (* -------------------- BFS: succ0 read (visited + indeg) -------------------- *)
         ; Succ0_Read,
           [ when_ s0_valid.value
               [ vis_addr   <-- s0_id.value
               ; indeg_addr <-- s0_id.value
               ; sm.set_next Succ0_Commit
               ]
-          ; when_ (~:s0_valid.value) [ sm.set_next Succ1_Read ]
+          ; when_ (~:(s0_valid.value)) [ sm.set_next Succ1_Read ]
           ]
 
-        (* -------------------- BFS: succ0 commit (indeg++, maybe enqueue) -------------------- *)
         ; Succ0_Commit,
-          [ (* indeg++ always when edge exists *)
-            indeg_addr  <-- s0_id.value
+          [ indeg_addr  <-- s0_id.value
           ; indeg_wdata <-- uresize ~width:16 (indeg_rd +:. 1)
           ; indeg_we    <-- vdd
 
-          ; (* enqueue if not visited *)
-            when_ (~:vis_rd)
-              [ (* visited=1 *)
-                vis_addr  <-- s0_id.value
+          ; when_ (~:vis_rd)
+              [ vis_addr  <-- s0_id.value
               ; vis_wdata <-- vdd
               ; vis_we    <-- vdd
 
-              ; (* push rc *)
-                q_addr  <-- q_tail.value
+              ; q_addr  <-- q_tail.value
               ; q_wdata <-- concat_msb [ s0_r.value; s0_c.value ]
               ; q_we    <-- vdd
               ; q_tail  <-- q_tail.value +:. 1
@@ -693,17 +667,15 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next Succ1_Read
           ]
 
-        (* -------------------- BFS: succ1 read (visited + indeg) -------------------- *)
         ; Succ1_Read,
           [ when_ s1_valid.value
               [ vis_addr   <-- s1_id.value
               ; indeg_addr <-- s1_id.value
               ; sm.set_next Succ1_Commit
               ]
-          ; when_ (~:s1_valid.value) [ sm.set_next QRead ]
+          ; when_ (~:(s1_valid.value)) [ sm.set_next QRead ]
           ]
 
-        (* -------------------- BFS: succ1 commit (indeg++, maybe enqueue) -------------------- *)
         ; Succ1_Commit,
           [ indeg_addr  <-- s1_id.value
           ; indeg_wdata <-- uresize ~width:16 (indeg_rd +:. 1)
@@ -724,7 +696,6 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next QRead
           ]
 
-        (* -------------------- TOPO INIT -------------------- *)
         ; TopoInit,
           [ topo_head <--. 0
           ; topo_tail <--. 1
@@ -737,7 +708,6 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next TopoRead
           ]
 
-        (* -------------------- TOPO READ u -------------------- *)
         ; TopoRead,
           [ when_ topo_done [ sm.set_next DpInit ]
           ; when_ (~:topo_done)
@@ -746,42 +716,33 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
               ]
           ]
 
-        (* -------------------- TOPO GOT u (topo_rd is for topo_head) -------------------- *)
         ; TopoGot,
           [ topo_u    <-- topo_rd
           ; topo_head <-- topo_head.value +:. 1
-
-          ; (* request edge for u *)
-            edge_addr <-- topo_rd
+          ; edge_addr <-- topo_rd
           ; sm.set_next TopoEdgeGot
           ]
 
-        (* -------------------- TOPO: consume edge_rd -------------------- *)
         ; TopoEdgeGot,
-          [ (* capture edge successors into s0/s1 regs (reuse) *)
-            s0_id    <-- edge_s0_id
+          [ s0_id    <-- edge_s0_id
           ; s1_id    <-- edge_s1_id
           ; s0_valid <-- edge_s0_valid
           ; s1_valid <-- edge_s1_valid
-
           ; sm.set_next TopoS0_Read
           ]
 
-        (* -------------------- TOPO succ0 read indeg -------------------- *)
         ; TopoS0_Read,
           [ when_ s0_valid.value
               [ indeg_addr <-- s0_id.value
               ; sm.set_next TopoS0_Commit
               ]
-          ; when_ (~:s0_valid.value) [ sm.set_next TopoS1_Read ]
+          ; when_ (~:(s0_valid.value)) [ sm.set_next TopoS1_Read ]
           ]
 
-        (* -------------------- TOPO succ0 commit (indeg--, maybe append) -------------------- *)
         ; TopoS0_Commit,
           [ indeg_addr  <-- s0_id.value
           ; indeg_wdata <-- uresize ~width:16 newv
           ; indeg_we    <-- vdd
-
           ; when_ (newv ==:. 0) [ sm.set_next TopoS0_Append ]
           ; when_ (newv !=:. 0) [ sm.set_next TopoS1_Read ]
           ]
@@ -795,7 +756,6 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next TopoS1_Read
           ]
 
-        (* -------------------- TOPO succ1 read indeg -------------------- *)
         ; TopoS1_Read,
           [ when_ s1_valid.value
               [ indeg_addr <-- s1_id.value
@@ -804,12 +764,11 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; when_ (~:s1_valid.value) [ sm.set_next TopoRead ]
           ]
 
-        (* -------------------- TOPO succ1 commit (indeg--, maybe append) -------------------- *)
         ; TopoS1_Commit,
-          [ indeg_addr  <-- s1_id.value
+          [ let newv = indeg_rd -:. 1 in
+            indeg_addr  <-- s1_id.value
           ; indeg_wdata <-- uresize ~width:16 newv
           ; indeg_we    <-- vdd
-
           ; when_ (newv ==:. 0) [ sm.set_next TopoS1_Append ]
           ; when_ (newv !=:. 0) [ sm.set_next TopoRead ]
           ]
@@ -823,27 +782,22 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next TopoRead
           ]
 
-        (* -------------------- DP INIT -------------------- *)
         ; DpInit,
-          [ (* dp_idx = topo_cnt - 1 *)
-            dp_idx <-- topo_cnt.value -:. 1
+          [ dp_idx <-- topo_cnt.value -:. 1
           ; sm.set_next DpReadU
           ]
 
-        (* -------------------- DP: read topo[dp_idx] -------------------- *)
         ; DpReadU,
           [ topo_addr0 <-- dp_idx.value
           ; sm.set_next DpGotU
           ]
 
-        (* -------------------- DP: got u, request edge -------------------- *)
         ; DpGotU,
           [ dp_u     <-- topo_rd
           ; edge_addr <-- topo_rd
           ; sm.set_next DpEdgeGot
           ]
 
-        (* -------------------- DP: got edge, decide exit / read ways -------------------- *)
         ; DpEdgeGot,
           [ s0_id    <-- edge_s0_id
           ; s1_id    <-- edge_s1_id
@@ -853,8 +807,8 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; dp_w0 <--. 0
           ; dp_w1 <--. 0
 
-          ; when_ is_exit [ sm.set_next DpWriteU ]
-          ; when_ (~:is_exit) [ sm.set_next DpReadW0 ]
+          ; when_ dp_u_is_exit [ sm.set_next DpWriteU ]
+          ; when_ (~:dp_u_is_exit) [ sm.set_next DpReadW0 ]
           ]
 
         ; DpReadW0,
@@ -885,10 +839,10 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
 
         ; DpWriteU,
           [ ways_addr  <-- dp_u.value
-          ; ways_wdata <-- val_u
+          ; ways_wdata <-- dp_val_u
           ; ways_we    <-- vdd
 
-          ; when_ (dp_u.value ==: start_id.value) [ part2 <-- val_u ]
+          ; when_ (dp_u.value ==: start_id.value) [ part2 <-- dp_val_u ]
 
           ; when_ (dp_idx.value ==:. 0)
               [ done_level <-- vdd

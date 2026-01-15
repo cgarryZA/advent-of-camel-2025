@@ -164,10 +164,13 @@ let build_weighted_prefix_sum
 
   (* cell widths/heights in tiles (since coords are integer tile positions) *)
   let dx =
-    Array.init w ~f:(fun i -> Int64.(cx.(i + 1) - cx.(i)))
+    Array.init w ~f:(fun i ->
+      Int64.(cx.(i + 1) - cx.(i)))
   in
+
   let dy =
-    Array.init h ~f:(fun j -> Int64.(cy.(j + 1) - cy.(j)))
+    Array.init h ~f:(fun j ->
+      Int64.(cy.(j + 1) - cy.(j)))
   in
 
   let ps = Array.make_matrix ~dimx:(h + 1) ~dimy:(w + 1) 0L in

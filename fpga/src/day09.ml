@@ -9,18 +9,19 @@ let clock_freq       = Ulx3s.Clock_freq.Clock_25mhz
 let uart_fifo_depth  = 32
 let extra_synth_args = []
 
+let ram_depth = 131072
+let addr_bits = 17
+
 (* ====================== RAM ====================== *)
 
 (* NOTE: Day09 needs to hold points + a weighted prefix-sum table.
    Depth here is larger than earlier days by design. *)
 module Ram = Loadable_pseudo_dual_port_ram.Make (struct
   let width           = 32
-  let depth           = 131072
+  let depth           = ram_depth
   let num_ports       = 2
   let zero_on_startup = false
 end)
-
-let addr_bits = 17
 
 (* ====================== LOADER ====================== *)
 
@@ -60,7 +61,9 @@ module Loader = struct
         ~f:(fun x -> x +:. 1)
     in
 
-    let max_addr = of_int_trunc ~width:addr_bits (Ram.depth - 1) in
+    let max_addr =
+      of_int_trunc ~width:addr_bits (ram_depth - 1)
+    in
 
     compile
       [ (* Detect overflow on attempted write to last address *)
@@ -275,6 +278,27 @@ let algo
     mux ps_step.value [ y_hi.value; y_lo.value; y_hi.value; y_lo.value ]
   in
 
+  
+    (* bounds for Part 2 prefix-sum query:
+      x_lo = min(ix_i, ix_j)
+      x_hi = max(ix_i, ix_j) + 1
+      similarly for y
+  *)
+  let ix_lo = min_u16 i_ix.value j_ix.value in
+  let ix_hi = max_u16 i_ix.value j_ix.value in
+  let iy_lo = min_u16 i_iy.value j_iy.value in
+  let iy_hi = max_u16 i_iy.value j_iy.value in
+
+  let ps64 = concat_msb [ ram0_rd; ps_lo_tmp.value ] in
+
+  (* allowed_sum = A - B - C + D *)
+  let t1 = ps_a.value -: ps_b.value in
+  let t2 = t1 -: ps_c.value in
+  let allowed_sum = t2 +: ps_d.value in
+
+  (* if allowed_sum == area then update max_p2 *)
+  let ok = allowed_sum ==: pair_area.value in
+  let area = pair_area.value in
   (* ---------------------------------------------------------- *)
   (* FSM                                                         *)
   (* ---------------------------------------------------------- *)
@@ -432,22 +456,20 @@ let algo
 
         ; ( Pair_compute
           , [ (* Part 1 area *)
-              let area = compute_area_u32 i_x.value i_y.value j_x.value j_y.value in
-              pair_area <-- area;
+              pair_area <--
+                compute_area_u32
+                  i_x.value i_y.value
+                  j_x.value j_y.value;
 
-              (* update max_p1 *)
               max_p1 <--
-                mux2 (area >: max_p1.value) area max_p1.value;
-
-              (* bounds for Part 2 prefix-sum query:
-                 x_lo = min(ix_i, ix_j)
-                 x_hi = max(ix_i, ix_j) + 1
-                 similarly for y
-              *)
-              let ix_lo = min_u16 i_ix.value j_ix.value in
-              let ix_hi = max_u16 i_ix.value j_ix.value in
-              let iy_lo = min_u16 i_iy.value j_iy.value in
-              let iy_hi = max_u16 i_iy.value j_iy.value in
+                mux2
+                  (compute_area_u32
+                    i_x.value i_y.value
+                    j_x.value j_y.value >: max_p1.value)
+                  (compute_area_u32
+                    i_x.value i_y.value
+                    j_x.value j_y.value)
+                  max_p1.value;
 
               x_lo <-- uresize ~width:32 ix_lo;
               x_hi <-- uresize ~width:32 (ix_hi +:. 1);
@@ -481,7 +503,6 @@ let algo
 
         ; ( Ps_hi_consume
           , [ (* assemble 64-bit: hi:ram0_rd, lo:ps_lo_tmp *)
-              let ps64 = concat_msb [ ram0_rd; ps_lo_tmp.value ] in
 
               (* store into A/B/C/D depending on ps_step *)
               if_ (ps_step.value ==:. 0) [ ps_a <-- ps64 ] [];
@@ -499,15 +520,7 @@ let algo
           )
 
         ; ( Pair_evaluate
-          , [ (* allowed_sum = A - B - C + D *)
-              let t1 = ps_a.value -: ps_b.value in
-              let t2 = t1 -: ps_c.value in
-              let allowed_sum = t2 +: ps_d.value in
-
-              (* if allowed_sum == area then update max_p2 *)
-              let ok = allowed_sum ==: pair_area.value in
-              let area = pair_area.value in
-              max_p2 <--
+          , [ max_p2 <--
                 mux2 (ok &: (area >: max_p2.value)) area max_p2.value;
 
               sm.set_next Next_j
