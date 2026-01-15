@@ -1,6 +1,6 @@
 <div align="center">
   
-  <img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/snowglobe_camel.png"
+  <img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/img/snowglobe_camel.png"
        alt="Advent of Camel logo"
        width="450"/>
 
@@ -81,7 +81,7 @@ This project is based on the [Jane Street Hardcaml Template Project](https://git
 
 <p align="center">
   <img
-    src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/Animation.gif"
+    src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/img/Animation.gif"
     alt="Advent of Code background animation"
     width="560"
   />
@@ -181,7 +181,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 <div align="center">
 
 <!-- Calendar GIF -->
-<img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/calendar.gif"
+<img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/img/calendar.gif"
      alt="Advent calendar progress"
      width="360"/>
 
