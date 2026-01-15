@@ -182,9 +182,9 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 ### Day 1, Part 1 + Part 2
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day01.ml"><img src="https://img.shields.io/badge/Code-day01.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/1"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design simulates the behaviour of a combination lock driven by a sequence of direction-and-step instructions.
@@ -200,9 +200,9 @@ Instructions are processed sequentially at a rate of one per cycle, and the per-
 ### Day 2, Part 1 + Part 2
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day02.ml"><img src="https://img.shields.io/badge/Code-day02.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/2"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design evaluates numeric ranges stored in external memory and identifies values that satisfy digit-pattern constraints, using a fully streaming binary-to-BCD datapath.
@@ -219,9 +219,9 @@ The design avoids per-digit iteration in the main loop. All candidates are evalu
 ### Day 3, Part 1 + Part 2
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day03.ml"><img src="https://img.shields.io/badge/Code-day03.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/3"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design processes each input line as a stream of ASCII digits and computes one result per line for both parts of the problem.
@@ -239,9 +239,9 @@ The computation proceeds in a single pass over the input, advancing one digit pe
 ### Day 4, Part 1 + Part 2
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day04.ml"><img src="https://img.shields.io/badge/Code-day04.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/4"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design implements a parametrised two-dimensional stencil engine operating over a padded grid domain.
@@ -258,9 +258,9 @@ During each scan, one packed word is processed per cycle. The design is paramete
 ### Day 5, Part 1 + Part 2
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day05.ml"><img src="https://img.shields.io/badge/Code-day05.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/5"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design processes a set of numeric ranges and query items, performing range merging followed by membership testing.
@@ -279,9 +279,9 @@ The entire computation is performed without sorting in hardware, relying instead
 ### Day 6, Part 1 + Part 2
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day06.ml"><img src="https://img.shields.io/badge/Code-day06.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/6"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design evaluates a stream of arithmetic expressions encoded as a compact byte format, supporting both additive and multiplicative reductions.
@@ -298,9 +298,9 @@ The design avoids buffering entire expressions. Instead, each value is folded in
 ### Day 8, Part 1 + Part 2
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day08.ml"><img src="https://img.shields.io/badge/Code-day08.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/8"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design implements a streaming hardware version of Kruskal’s algorithm using an on-chip union–find structure.
@@ -319,9 +319,9 @@ The entire computation is performed as a single pass over the edge stream, with 
 ### Day 9, Part 1
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day09.ml"><img src="https://img.shields.io/badge/Code-day09.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/9"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design computes the largest axis-aligned rectangle defined by two points in a set of integer coordinates.
@@ -336,9 +336,9 @@ Although the algorithm is quadratic in the number of points, it maps cleanly to 
 ### Day 10 Part 1
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day10.ml"><img src="https://img.shields.io/badge/Code-day10.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/10"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design streams a sequence of independent “machines” from RAM and solves each one with a bounded brute-force subset search over up to 16 control inputs.
@@ -353,9 +353,9 @@ RAM access is explicitly scheduled as a 1-cycle read pipeline: addresses are set
 ### Day 11 Part 1 + Part 2
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day11.ml"><img src="https://img.shields.io/badge/Code-day11.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/11"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
 This design treats the input as a compact graph problem encoded entirely in RAM and executes a small number of structured graph traversals to extract the required path counts.
