@@ -122,7 +122,6 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 <!-- Calendar-style grid -->
 <table align="center">
 <tr>
-  <td></td>
   <td><a href="#day-1"><img src="https://img.shields.io/badge/01-Done-22c55e"></a></td>
   <td><a href="#day-2"><img src="https://img.shields.io/badge/02-Done-22c55e"></a></td>
   <td><a href="#day-3"><img src="https://img.shields.io/badge/03-Done-22c55e"></a></td>
@@ -138,7 +137,6 @@ Each solution follows a deterministic **load–compute–report** structure: inp
   <td><a href="#day-10"><img src="https://img.shields.io/badge/10-Done-22c55e"></a></td>
   <td><a href="#day-11"><img src="https://img.shields.io/badge/11-Done-22c55e"></a></td>
   <td><img src="https://img.shields.io/badge/12-Pending-3f3f46"></td>
-  <td></td>
 </tr>
 </table>
 
