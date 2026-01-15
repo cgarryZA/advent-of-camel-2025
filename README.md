@@ -110,7 +110,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 
 <a name="solutions"></a>
 ## Solutions
-
+<div align="center">
 <table>
 <tr>
 <td valign="top">
