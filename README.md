@@ -14,7 +14,7 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 <a name="internal-nav"></a>
 ### Readme Links
   <a href="#intro"><img src="https://img.shields.io/badge/Introduction-1f6feb?style=for-the-badge"></a>
-  <a href="#setup"><img src="https://img.shields.io/badge/Setup-and-Installation-Instructions-1f6feb?style=for-the-badge"></a>
+  <a href="#setup"><img src="https://img.shields.io/badge/Setup-Guide-1f6feb?style=for-the-badge"></a>
   <a href="#execution-model"><img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge"></a>
   <a href="#solutions"><img src="https://img.shields.io/badge/Solutions-Section-1f6feb?style=for-the-badge"></a>
   <a href="#about"><img src="https://img.shields.io/badge/About-Me-1f6feb?style=for-the-badge"></a>
@@ -349,7 +349,7 @@ For part 2, the same propagation engine is reused across a fixed set of sourceâ€
 
 RAM accesses are explicitly staged: addresses are issued in one state and consumed the next, with a dual-port RAM allowing simultaneous read and write during propagation. A single FSM sequences header decode, per-run reset, traversal, capture, and final computation. Both part 1 and part 2 results are emitted once all runs complete.
 
-<a name="intro"></a>
+<a name="about"></a>
 ## About Me
 <a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
