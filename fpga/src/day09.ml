@@ -307,17 +307,18 @@ let algo
   compile
     [ sm.switch
         [ ( Loading
-          , [ when_ load_finished
-                [ p0_addr   <--. 0
-                ; p1_addr   <--. 0
-                ; max_p1    <--. 0
-                ; max_p2    <--. 0
-                ; p1_valid  <-- gnd
-                ; p2_valid  <-- gnd
-                ; sm.set_next Magic_read
-                ]
-            ]
-          )
+            , [ when_ load_finished
+                  [ p0_addr   <--. 0
+                  ; p1_addr   <--. 0
+                  ; max_p1    <--. 0
+                  ; max_p2    <--. 0
+                  ; p1_valid  <-- gnd
+                  ; p2_valid  <-- gnd
+                  ; done_seen <-- gnd   (* <<< THIS WAS MISSING *)
+                  ; sm.set_next Magic_read
+                  ]
+              ]
+            )
 
         ; ( Magic_read
           , [ p0_addr <--. 0

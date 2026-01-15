@@ -737,7 +737,7 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ]
 
         ; TopoScanAdvance,
-          [ when_ (scan_id.value ==: (exit_base14 +: loader.width -:. 1))
+          [ when_ (scan_id.value ==: (q_tail.value -:. 1))
               [ sm.set_next TopoRead ]
           ; when_ (scan_id.value <>: (exit_base14 +: loader.width -:. 1))
               [ scan_id <-- scan_id.value +:. 1
