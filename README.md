@@ -33,6 +33,38 @@ This project is based on the [Jane Street Hardcaml Template Project](https://git
 
 I've started with AoC days that had solutions that seemed like they would map well to hardware implementations and will see how many I can finish before the deadline.
 
+## Setup & Installation
+
+### Prerequisites
+
+This project uses Hardcaml and the Jane Street OCaml toolchain.
+
+You will need:
+- A Unix-like environment (Linux, macOS, or WSL recommended)
+- `git`
+- `opam`
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/cgarryZA/advent-of-camel-2025.git
+cd advent-of-camel-2025
+```
+Once the environment is set up, verify that the correct compiler is active:
+
+```bash
+opam switch show
+ocamlc -version
+```
+
+### 2. Set up the OCaml / Hardcaml environment
+
+This project follows the environment and tooling conventions of the Jane Street Hardcaml Template Project.
+
+Please follow the official setup instructions here to install the compiler, create the correct opam switch, and install Hardcaml and its dependencies:
+
+👉 [Jane Street Hardcaml Template Project](https://github.com/janestreet/hardcaml_template_project/tree/with-extensions)
+
+Once the environment is set up and the correct opam switch is active, you can build and run the project as described below.
 ---
 
 ## Using the repo
