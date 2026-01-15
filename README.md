@@ -16,14 +16,9 @@
   </a>
 </p>
 
-This repository contains synthesizable FPGA implementations of selected  
-[Advent of Code 2025](https://adventofcode.com/) problems, targeting streaming execution on the ULX3S platform for the  
-[Advent of FPGA Challenge](https://blog.janestreet.com/advent-of-fpga-challenge-2025/).
+This repository contains synthesizable FPGA implementations of selected [Advent of Code 2025](https://adventofcode.com/) problems, targeting streaming execution on the ULX3S platform for the [Advent of FPGA Challenge](https://blog.janestreet.com/advent-of-fpga-challenge-2025/).
 
-This project is based on the  
-[Jane Street Hardcaml Template Project](https://github.com/janestreet/hardcaml_template_project/tree/with-extensions),  
-with the structure and UART infrastructure rebuilt and updated from the  
-[2024 Advent of Hardcaml](https://github.com/asinghani/advent-of-hardcaml-2024/) designs to match current versions of Hardcaml and dune.
+This project is based on the [Jane Street Hardcaml Template Project](https://github.com/janestreet/hardcaml_template_project/tree/with-extensions), with the structure and UART infrastructure rebuilt and updated from the [2024 Advent of Hardcaml](https://github.com/asinghani/advent-of-hardcaml-2024/) designs to match current versions of Hardcaml and dune.
 
 I've started with AoC days that had solutions that seemed like they would map well to hardware implementations and will see how many I can finish before the deadline.
 
