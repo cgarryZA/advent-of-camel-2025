@@ -149,7 +149,7 @@ where `X` is the day number (no leading zeros).
 cd fpga
 make run-all
 ```
-This command runs all completed days against the full input from the Advent of Code website.
+This command runs all completed days against the full input from the Advent of Code website. If you do this day 2 runs very slowly so expect that.
 
 ```bash
 cd fpga
