@@ -48,10 +48,8 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 
   <a href="https://blog.janestreet.com/advent-of-fpga-challenge-2025/">
     <img src="https://img.shields.io/badge/Challenge-Advent_of_FPGA-0ea5e9?style=for-the-badge">
-  </a>
-</p>
+  </a><br><br>
 
-<p align="center">
   <a href="https://github.com/janestreet/hardcaml_template_project/tree/with-extensions">
     <img src="https://img.shields.io/badge/Jane_Street-Template-64748b?style=for-the-badge">
   </a>&nbsp;&nbsp;
