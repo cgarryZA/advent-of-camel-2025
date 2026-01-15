@@ -159,9 +159,28 @@ let algo
   let spec = Reg_spec.create ~clock ~clear () in
   let sm   = State_machine.create (module States) spec in
 
-  (* Port address regs (synchronous read: consume next cycle) *)
-  let p0_addr = Variable.reg spec ~width:addr_bits in
-  let p1_addr = Variable.reg spec ~width:addr_bits in
+  (* ---------------------------------------------------------- *)
+  (* IMPORTANT: sync RAM needs "read request" address to be      *)
+  (* combinational. We keep a reg for "hold last", but we drive  *)
+  (* the actual port address with a wire.                        *)
+  (* ---------------------------------------------------------- *)
+
+  let p0_addr_r = Variable.reg spec ~width:addr_bits in
+  let p1_addr_r = Variable.reg spec ~width:addr_bits in
+
+  let p0_addr = Variable.wire ~default:p0_addr_r.value () in
+  let p1_addr = Variable.wire ~default:p1_addr_r.value () in
+
+  let p0_req (a : Signal.t) =
+    [ p0_addr   <-- a
+    ; p0_addr_r <-- a
+    ]
+  in
+  let p1_req (a : Signal.t) =
+    [ p1_addr   <-- a
+    ; p1_addr_r <-- a
+    ]
+  in
 
   (* Parsed header *)
   let n_points   = Variable.reg spec ~width:32 in
@@ -206,11 +225,9 @@ let algo
   let ps_c      = Variable.reg spec ~width:64 in
   let ps_d      = Variable.reg spec ~width:64 in
 
-  (* Output valids (sticky) *)
-  let p1_valid = Variable.reg spec ~width:1 in
-  let p2_valid = Variable.reg spec ~width:1 in
-
-  let done_seen = Variable.reg spec ~width:1 in
+  (* Done pulse for Print_decimal_outputs *)
+  let done_seen  = Variable.reg spec ~width:1 in
+  let done_pulse = sm.is Done &: ~:(done_seen.value) in
 
   (* ---------------------------------------------------------- *)
   (* Helpers: address math                                       *)
@@ -230,13 +247,14 @@ let algo
   let point_base_addr (idx : Signal.t) =
     (* base = 2 + 3*idx *)
     let idx3 = mul3_u32 idx in
-    uresize ~width:addr_bits ((of_int_trunc ~width:addr_bits 2) +: uresize ~width:addr_bits idx3)
+    uresize ~width:addr_bits
+      ((of_int_trunc ~width:addr_bits 2) +: uresize ~width:addr_bits idx3)
   in
 
   let ps_entry_addr_lo ~(yy : Signal.t) ~(xx : Signal.t) =
     (* addr = base_ps + 2*(yy*ps_w + xx) *)
     let prod = yy *: ps_w.value in
-    let idx = uresize ~width:32 (uresize ~width:32 prod +: xx) in
+    let idx  = uresize ~width:32 (uresize ~width:32 prod +: xx) in
     let idx2 = word2_of_u32 idx in
     uresize ~width:addr_bits (base_ps.value +: uresize ~width:addr_bits idx2)
   in
@@ -255,8 +273,8 @@ let algo
   in
 
   let compute_area_u32 (x1 : Signal.t) (y1 : Signal.t) (x2 : Signal.t) (y2 : Signal.t) =
-    let dx = abs_diff_u32 x1 x2 in
-    let dy = abs_diff_u32 y1 y2 in
+    let dx  = abs_diff_u32 x1 x2 in
+    let dy  = abs_diff_u32 y1 y2 in
     let dx1 = uresize ~width:64 (dx +:. 1) in
     let dy1 = uresize ~width:64 (dy +:. 1) in
     uresize ~width:64 (dx1 *: dy1)
@@ -279,12 +297,7 @@ let algo
     mux ps_step.value [ y_hi.value; y_lo.value; y_hi.value; y_lo.value ]
   in
 
-  
-    (* bounds for Part 2 prefix-sum query:
-      x_lo = min(ix_i, ix_j)
-      x_hi = max(ix_i, ix_j) + 1
-      similarly for y
-  *)
+  (* bounds for Part 2 prefix-sum query *)
   let ix_lo = min_u16 i_ix.value j_ix.value in
   let ix_hi = max_u16 i_ix.value j_ix.value in
   let iy_lo = min_u16 i_iy.value j_iy.value in
@@ -297,9 +310,9 @@ let algo
   let t2 = t1 -: ps_c.value in
   let allowed_sum = t2 +: ps_d.value in
 
-  (* if allowed_sum == area then update max_p2 *)
-  let ok = allowed_sum ==: pair_area.value in
+  let ok   = allowed_sum ==: pair_area.value in
   let area = pair_area.value in
+
   (* ---------------------------------------------------------- *)
   (* FSM                                                         *)
   (* ---------------------------------------------------------- *)
@@ -307,47 +320,47 @@ let algo
   compile
     [ sm.switch
         [ ( Loading
-            , [ when_ load_finished
-                  [ p0_addr   <--. 0
-                  ; p1_addr   <--. 0
-                  ; max_p1    <--. 0
+          , [ when_ load_finished
+                ( p0_req (of_int_trunc ~width:addr_bits 0)
+                @ p1_req (of_int_trunc ~width:addr_bits 0)
+                @ [ max_p1    <--. 0
                   ; max_p2    <--. 0
-                  ; p1_valid  <-- gnd
-                  ; p2_valid  <-- gnd
-                  ; done_seen <-- gnd   (* <<< THIS WAS MISSING *)
+                  ; done_seen <-- gnd
+                  ; i_idx     <--. 0
+                  ; j_idx     <--. 0
                   ; sm.set_next Magic_read
-                  ]
-              ]
-            )
-
-        ; ( Magic_read
-          , [ p0_addr <--. 0
-            ; sm.set_next Magic_consume
+                  ] )
             ]
           )
+
+        ; ( Magic_read
+          , p0_req (of_int_trunc ~width:addr_bits 0)
+            @ [ sm.set_next Magic_consume ]
+          )
         ; ( Magic_consume
-          , [ (* ignore magic for now *)
-              sm.set_next N_read
-            ]
+          , [ sm.set_next N_read ]
           )
 
         ; ( N_read
-          , [ p0_addr <--. 1
-            ; sm.set_next N_consume
-            ]
+          , p0_req (of_int_trunc ~width:addr_bits 1)
+            @ [ sm.set_next N_consume ]
           )
         ; ( N_consume
           , [ n_points <-- ram0_rd
 
               (* meta_base = 2 + 3*n_points *)
-            ; meta_base <-- uresize ~width:addr_bits ((of_int_trunc ~width:addr_bits 2)
-                              +: uresize ~width:addr_bits (mul3_u32 ram0_rd))
+            ; meta_base <--
+                uresize ~width:addr_bits
+                  ((of_int_trunc ~width:addr_bits 2)
+                   +: uresize ~width:addr_bits (mul3_u32 ram0_rd))
 
               (* base_ps = meta_base + 2 *)
-            ; base_ps <-- uresize ~width:addr_bits (
-                  uresize ~width:addr_bits ((of_int_trunc ~width:addr_bits 2)
-                    +: uresize ~width:addr_bits (mul3_u32 ram0_rd))
-                  +:. 2)
+            ; base_ps <--
+                uresize ~width:addr_bits
+                  ( uresize ~width:addr_bits
+                      ((of_int_trunc ~width:addr_bits 2)
+                       +: uresize ~width:addr_bits (mul3_u32 ram0_rd))
+                    +:. 2 )
 
               (* init i=0 *)
             ; i_idx <--. 0
@@ -356,9 +369,8 @@ let algo
           )
 
         ; ( Meta_w_read
-          , [ p0_addr <-- meta_base.value
-            ; sm.set_next Meta_w_consume
-            ]
+          , p0_req meta_base.value
+            @ [ sm.set_next Meta_w_consume ]
           )
         ; ( Meta_w_consume
           , [ ps_w <-- ram0_rd
@@ -367,9 +379,8 @@ let algo
           )
 
         ; ( Meta_h_read
-          , [ p0_addr <-- meta_base.value +:. 1
-            ; sm.set_next Meta_h_consume
-            ]
+          , p0_req (meta_base.value +:. 1)
+            @ [ sm.set_next Meta_h_consume ]
           )
         ; ( Meta_h_consume
           , [ ps_h <-- ram0_rd
@@ -378,9 +389,8 @@ let algo
           )
 
         ; ( I_read_x
-          , [ p0_addr <-- point_base_addr i_idx.value
-            ; sm.set_next I_consume_x
-            ]
+          , p0_req (point_base_addr i_idx.value)
+            @ [ sm.set_next I_consume_x ]
           )
         ; ( I_consume_x
           , [ i_x <-- ram0_rd
@@ -389,9 +399,8 @@ let algo
           )
 
         ; ( I_read_y
-          , [ p0_addr <-- point_base_addr i_idx.value +:. 1
-            ; sm.set_next I_consume_y
-            ]
+          , p0_req (point_base_addr i_idx.value +:. 1)
+            @ [ sm.set_next I_consume_y ]
           )
         ; ( I_consume_y
           , [ i_y <-- ram0_rd
@@ -400,9 +409,8 @@ let algo
           )
 
         ; ( I_read_idx
-          , [ p0_addr <-- point_base_addr i_idx.value +:. 2
-            ; sm.set_next I_consume_idx
-            ]
+          , p0_req (point_base_addr i_idx.value +:. 2)
+            @ [ sm.set_next I_consume_idx ]
           )
         ; ( I_consume_idx
           , [ i_ix <-- select ram0_rd ~high:15 ~low:0
@@ -418,15 +426,11 @@ let algo
           )
 
         ; ( J_read_x
-          , [ (* if j == n, advance i *)
-              if_ (j_idx.value ==: n_points.value)
+          , [ if_ (j_idx.value ==: n_points.value)
                 [ sm.set_next Next_i ]
-                [ p1_addr <-- point_base_addr j_idx.value
-                ; sm.set_next J_consume_x
-                ]
+                (p1_req (point_base_addr j_idx.value) @ [ sm.set_next J_consume_x ])
             ]
           )
-
         ; ( J_consume_x
           , [ j_x <-- ram1_rd
             ; sm.set_next J_read_y
@@ -434,9 +438,8 @@ let algo
           )
 
         ; ( J_read_y
-          , [ p1_addr <-- point_base_addr j_idx.value +:. 1
-            ; sm.set_next J_consume_y
-            ]
+          , p1_req (point_base_addr j_idx.value +:. 1)
+            @ [ sm.set_next J_consume_y ]
           )
         ; ( J_consume_y
           , [ j_y <-- ram1_rd
@@ -445,9 +448,8 @@ let algo
           )
 
         ; ( J_read_idx
-          , [ p1_addr <-- point_base_addr j_idx.value +:. 2
-            ; sm.set_next J_consume_idx
-            ]
+          , p1_req (point_base_addr j_idx.value +:. 2)
+            @ [ sm.set_next J_consume_idx ]
           )
         ; ( J_consume_idx
           , [ j_ix <-- select ram1_rd ~high:15 ~low:0
@@ -459,38 +461,29 @@ let algo
         ; ( Pair_compute
           , [ (* Part 1 area *)
               pair_area <--
-                compute_area_u32
-                  i_x.value i_y.value
-                  j_x.value j_y.value;
+                compute_area_u32 i_x.value i_y.value j_x.value j_y.value
 
-              max_p1 <--
+            ; max_p1 <--
                 mux2
-                  (compute_area_u32
-                    i_x.value i_y.value
-                    j_x.value j_y.value >: max_p1.value)
-                  (compute_area_u32
-                    i_x.value i_y.value
-                    j_x.value j_y.value)
-                  max_p1.value;
+                  (compute_area_u32 i_x.value i_y.value j_x.value j_y.value >: max_p1.value)
+                  (compute_area_u32 i_x.value i_y.value j_x.value j_y.value)
+                  max_p1.value
 
-              x_lo <-- uresize ~width:32 ix_lo;
-              x_hi <-- uresize ~width:32 (ix_hi +:. 1);
-              y_lo <-- uresize ~width:32 iy_lo;
-              y_hi <-- uresize ~width:32 (iy_hi +:. 1);
+            ; x_lo <-- uresize ~width:32 ix_lo
+            ; x_hi <-- uresize ~width:32 (ix_hi +:. 1)
+            ; y_lo <-- uresize ~width:32 iy_lo
+            ; y_hi <-- uresize ~width:32 (iy_hi +:. 1)
 
               (* init ps read *)
-              ps_step <--. 0;
-              sm.set_next Ps_lo_read
+            ; ps_step <--. 0
+            ; sm.set_next Ps_lo_read
             ]
           )
 
         ; ( Ps_lo_read
-          , [ (* request low word of ps entry *)
-              p0_addr <-- ps_entry_addr_lo ~yy:ps_y_sel ~xx:ps_x_sel
-            ; sm.set_next Ps_lo_consume
-            ]
+          , p0_req (ps_entry_addr_lo ~yy:ps_y_sel ~xx:ps_x_sel)
+            @ [ sm.set_next Ps_lo_consume ]
           )
-
         ; ( Ps_lo_consume
           , [ ps_lo_tmp <-- ram0_rd
             ; sm.set_next Ps_hi_read
@@ -498,21 +491,17 @@ let algo
           )
 
         ; ( Ps_hi_read
-          , [ p0_addr <-- ps_entry_addr_hi ~yy:ps_y_sel ~xx:ps_x_sel
-            ; sm.set_next Ps_hi_consume
-            ]
+          , p0_req (ps_entry_addr_hi ~yy:ps_y_sel ~xx:ps_x_sel)
+            @ [ sm.set_next Ps_hi_consume ]
           )
-
         ; ( Ps_hi_consume
-          , [ (* assemble 64-bit: hi:ram0_rd, lo:ps_lo_tmp *)
+          , [ (* store into A/B/C/D depending on ps_step *)
+              if_ (ps_step.value ==:. 0) [ ps_a <-- ps64 ] []
+            ; if_ (ps_step.value ==:. 1) [ ps_b <-- ps64 ] []
+            ; if_ (ps_step.value ==:. 2) [ ps_c <-- ps64 ] []
+            ; if_ (ps_step.value ==:. 3) [ ps_d <-- ps64 ] []
 
-              (* store into A/B/C/D depending on ps_step *)
-              if_ (ps_step.value ==:. 0) [ ps_a <-- ps64 ] [];
-              if_ (ps_step.value ==:. 1) [ ps_b <-- ps64 ] [];
-              if_ (ps_step.value ==:. 2) [ ps_c <-- ps64 ] [];
-              if_ (ps_step.value ==:. 3) [ ps_d <-- ps64 ] [];
-
-              if_
+            ; if_
                 (ps_step.value ==:. 3)
                 [ sm.set_next Pair_evaluate ]
                 [ ps_step <-- ps_step.value +:. 1
@@ -523,9 +512,8 @@ let algo
 
         ; ( Pair_evaluate
           , [ max_p2 <--
-                mux2 (ok &: (area >: max_p2.value)) area max_p2.value;
-
-              sm.set_next Next_j
+                mux2 (ok &: (area >: max_p2.value)) area max_p2.value
+            ; sm.set_next Next_j
             ]
           )
 
@@ -544,9 +532,7 @@ let algo
           )
 
         ; ( Done
-          , [ p1_valid <-- ~:(done_seen.value)
-            ; p2_valid <-- ~:(done_seen.value)
-            ; done_seen <-- vdd
+          , [ done_seen <-- vdd
             ; sm.set_next Done
             ]
           )
@@ -558,8 +544,8 @@ let algo
   , p1_addr.value
   , max_p1.value
   , max_p2.value
-  , p1_valid.value
-  , p2_valid.value
+  , done_pulse
+  , done_pulse
   )
 ;;
 
