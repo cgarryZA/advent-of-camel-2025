@@ -151,7 +151,7 @@ module Loader = struct
 
     let assembled_u16 = concat_msb [ uart_rx.value; tmp_lo.value ] in
     let assembled_u14 = uresize ~width:14 assembled_u16 in
-
+    
     let write_addr =
       reg_fb spec ~width:14
         ~enable:(uart_rx.valid &: phase.is Load_grid &: ~:(loaded.value))
