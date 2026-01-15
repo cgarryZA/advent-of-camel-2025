@@ -16,13 +16,6 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
   <a href="https://adventofcode.com/2025"><img src="https://img.shields.io/badge/AoC_2025-Problems-facc15?style=for-the-badge"></a>
   <a href="#execution-model"><img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge"></a>
 
-  <a href="https://www.linkedin.com/in/christian-tt-garry/">
-    <img src="https://img.shields.io/badge/LinkedIn-Christian_Garry-0A66C2?style=for-the-badge&logo=linkedin">
-  </a>
-  <a href="https://christiangarry.com">
-    <img src="https://img.shields.io/badge/Website-christiangarry.com-111827?style=for-the-badge">
-  </a>
-
 </div>
 
 ## Introduction
@@ -37,7 +30,7 @@ I've started with AoC days that had solutions that seemed like they would map we
 
 ### Prerequisites
 
-This project uses Hardcaml and the Jane Street OCaml toolchain.
+This project uses **Hardcaml** and the Jane Street OCaml toolchain.
 
 You will need:
 - A Unix-like environment (Linux, macOS, or WSL recommended)
@@ -49,12 +42,7 @@ You will need:
 git clone https://github.com/cgarryZA/advent-of-camel-2025.git
 cd advent-of-camel-2025
 ```
-Once the environment is set up, verify that the correct compiler is active:
 
-```bash
-opam switch show
-ocamlc -version
-```
 
 ### 2. Set up the OCaml / Hardcaml environment
 
@@ -64,7 +52,15 @@ Please follow the official setup instructions here to install the compiler, crea
 
 👉 [Jane Street Hardcaml Template Project](https://github.com/janestreet/hardcaml_template_project/tree/with-extensions)
 
-Once the environment is set up and the correct opam switch is active, you can build and run the project as described below.
+Once the environment is set up, verify that the correct compiler is active:
+
+```bash
+opam switch show
+ocamlc -version
+```
+
+Once the correct opam switch is active, you can build and run the project as described below.
+
 ---
 
 ## Using the repo
@@ -394,3 +390,19 @@ For part 1, the circuit performs a forward propagation starting from you, accumu
 For part 2, the same propagation engine is reused across a fixed set of source–target runs (e.g. svr→fft, fft→dac, dac→out). Before each run, node counts are reset in RAM with only the start node seeded. Each traversal captures the final count at the target node. The required result is then formed by combining these captured values with a small number of 64-bit multiplications and additions.
 
 RAM accesses are explicitly staged: addresses are issued in one state and consumed the next, with a dual-port RAM allowing simultaneous read and write during propagation. A single FSM sequences header decode, per-run reset, traversal, capture, and final computation. Both part 1 and part 2 results are emitted once all runs complete.
+
+## About
+
+I’m Christian Garry, currently completing a Master’s degree in **Scientific Computing and Data Analysis**, with a background in electronic engineering and a strong focus on **hardware-aware computation**, **deterministic systems**, and **quantitative problem-solving**.
+
+This repository reflects my interest in treating algorithmic problems as *hardware systems*: explicit state machines, cycle-accurate memory access, and streaming I/O protocols, rather than abstract software control flow. My broader interests include high-performance computing, numerical methods, and quantitative research.
+
+You can find more about my work here:
+<div align="center">
+  <a href="https://www.linkedin.com/in/christian-tt-garry/">
+    <img src="https://img.shields.io/badge/LinkedIn-Christian_Garry-0A66C2?style=for-the-badge&logo=linkedin">
+  </a>
+  <a href="https://christiangarry.com">
+    <img src="https://img.shields.io/badge/Website-christiangarry.com-111827?style=for-the-badge">
+  </a>
+</div>
