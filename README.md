@@ -10,7 +10,7 @@
 # Advent of Hardcaml 2025 — Christian Garry 
 
 A hardware-first exploration of Advent of Code 2025, implementing each puzzle as a **cycle-accurate FPGA design** in **Hardcaml**, using streaming UART I/O, explicit memory pipelines, and finite-state schedulers instead of software control flow.
-  <a name="nav"></a>
+
   <a href="#solutions"><img src="https://img.shields.io/badge/Solutions-View-1f6feb?style=for-the-badge"></a>
   <a href="fpga/src"><img src="https://img.shields.io/badge/Code-Browse-f85149?style=for-the-badge"></a>
   <a href="https://adventofcode.com/2025"><img src="https://img.shields.io/badge/AoC_2025-Problems-facc15?style=for-the-badge"></a>
@@ -108,7 +108,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 
 ---
 <a name="solutions"></a>
-## Solutions <a href="#nav"><img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"></a>
+## Solutions <a href="#readme-top"><img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"></a>
 
 <div align="center">
 
