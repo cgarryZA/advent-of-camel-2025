@@ -145,6 +145,18 @@ Sample inputs live in:
 
 where `X` is the day number (no leading zeros).
 
+All hardware results are automatically checked against a canonical answer set.
+
+When a day is run, its UART output is captured and written to:
+
+`fpga/inputs/outputs.json`
+
+These results are then compared against the reference file:
+
+`fpga/inputs/answers.json`
+
+which contains the known-correct answers for each completed day.
+
 ```bash
 cd fpga
 make run-all
@@ -168,6 +180,8 @@ If you attempt to run a day without its input present, the runner will print the
 and tell you exactly where to save it:
 
 `/inputs/inputX.txt`
+
+When you clone this repo you will need to populate the answers.json with your own personal answers to AoC. This file is treated as the explicit source of truth.
 
 <a name="execution-model"></a>
 ## Execution Model
