@@ -216,7 +216,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 <!-- RIGHT: calendar gif -->
 <img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/calendar.gif"
      alt="Advent calendar progress"
-     width="260"/>
+     width="360"/>
 
 </td>
 </tr>
