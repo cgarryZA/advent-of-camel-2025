@@ -70,7 +70,7 @@ cd fpga
 dune runtest
 ```
 
-Runs all completed days against the full Advent of Code inputs. 
+This runs the testbench for each implemented day against the sample input provided in the Advent of Code problem description.
 Sample inputs live in:
 
 `/inputs/sampleX.txt`
@@ -399,10 +399,6 @@ For part 2, the same propagation engine is reused across a fixed set of sourceâ€
 RAM accesses are explicitly staged: addresses are issued in one state and consumed the next, with a dual-port RAM allowing simultaneous read and write during propagation. A single FSM sequences header decode, per-run reset, traversal, capture, and final computation. Both part 1 and part 2 results are emitted once all runs complete.
 
 ## About Me
-
-## About
-
-## About
 
 Iâ€™m Christian Garry, a Graduate Communications Engineer at Siemens and an MSc student in **Scientific Computing and Data Analysis** at Durham University. I previously completed an **MEng in Electronic Engineering** at Durham.
 
