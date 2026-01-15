@@ -205,6 +205,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 </tr>
 </table>
 </div>
+
 ---
 
 <a name="day-1"></a>
