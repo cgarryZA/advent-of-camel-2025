@@ -315,7 +315,7 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   (* ====================== Helpers ====================== *)
 
   (* grid linear address: r*(width+1) + c *)
-  let stride = uresize ~width:28 loader.width in
+    let stride = uresize ~width:28 (loader.width +:. 1) in
   
   let grid_addr (r : Signal.t) (c : Signal.t) =
     let r28 = uresize ~width:28 r in
