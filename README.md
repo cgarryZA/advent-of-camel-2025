@@ -208,7 +208,6 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 </td>
 </tr>
 </table>
-</table>
 
 </td>
 
