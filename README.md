@@ -51,6 +51,20 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
   </a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/janestreet/hardcaml_template_project/tree/with-extensions">
+    <img src="https://img.shields.io/badge/Template_Code-64748b?style=for-the-badge">
+  </a>&nbsp;&nbsp;
+
+  <a href="https://github.com/asinghani/advent-of-hardcaml-2024/">
+    <img src="https://img.shields.io/badge/Anish-2024-64748b?style=for-the-badge">
+  </a>&nbsp;&nbsp;
+
+  <a href="https://github.com/asinghani/advent-of-hardcaml-2025/">
+    <img src="https://img.shields.io/badge/Anish-2025-64748b?style=for-the-badge">
+  </a>
+</p>
+
 </div>
 
 
