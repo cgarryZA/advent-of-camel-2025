@@ -662,11 +662,15 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; indeg_we    <-- vdd
 
           ; when_ (~:vis_rd)
-              [ vis_addr  <-- s0_id.value
+              [ (* mark visited always *)
+                vis_addr  <-- s0_id.value
               ; vis_wdata <-- vdd
               ; vis_we    <-- vdd
+              ]
 
-              ; q_addr  <-- q_tail.value
+          ; when_ (~:vis_rd &: (s0_r.value <>: loader.height))
+              [ (* enqueue only if NOT exit row *)
+                q_addr  <-- q_tail.value
               ; q_wdata <-- concat_msb [ s0_r.value; s0_c.value ]
               ; q_we    <-- vdd
               ; q_tail  <-- q_tail.value +:. 1
@@ -691,16 +695,21 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; indeg_we    <-- vdd
 
           ; when_ (~:vis_rd)
-              [ vis_addr  <-- s1_id.value
+              [ (* mark visited always *)
+                vis_addr  <-- s0_id.value
               ; vis_wdata <-- vdd
               ; vis_we    <-- vdd
+              ]
 
-              ; q_addr  <-- q_tail.value
-              ; q_wdata <-- concat_msb [ s1_r.value; s1_c.value ]
+          ; when_ (~:vis_rd &: (s0_r.value <>: loader.height))
+              [ (* enqueue only if NOT exit row *)
+                q_addr  <-- q_tail.value
+              ; q_wdata <-- concat_msb [ s0_r.value; s0_c.value ]
               ; q_we    <-- vdd
               ; q_tail  <-- q_tail.value +:. 1
               ; q_cnt   <-- q_cnt.value +:. 1
               ]
+
 
           ; sm.set_next QRead
           ]
