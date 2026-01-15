@@ -35,10 +35,10 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 
 <p align="center">
   <a href="fpga/src">
-    <img src="https://img.shields.io/badge/Code-Browse-f85149?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Code-Github_File_Viewer-f85149?style=for-the-badge">
   </a><br/>
   <a href="https://adventofcode.com/2025">
-    <img src="https://img.shields.io/badge/AoC_2025-Problems-facc15?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Problems-AoC_2025-facc15?style=for-the-badge">
   </a>
 </p>
 
