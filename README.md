@@ -110,10 +110,14 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 
 <a name="solutions"></a>
 ## Solutions
-<div align="center">
+
+<table>
+<tr>
+<td valign="top">
+
+<!-- LEFT: solutions table -->
 <table>
 <tr><th>Day</th><th>Navigate</th></tr>
-
 <tr>
 <td><b>Day 1</b></td>
 <td>
@@ -201,6 +205,20 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 <a href="#day-11"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
 <a href="fpga/src/day11.ml"><img src="https://img.shields.io/badge/Code-day11.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/11"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
+</td>
+</tr>
+</table>
+</table>
+
+</td>
+
+<td valign="top" width="300">
+
+<!-- RIGHT: calendar gif -->
+<img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/calendar.gif"
+     alt="Advent calendar progress"
+     width="260"/>
+
 </td>
 </tr>
 </table>
