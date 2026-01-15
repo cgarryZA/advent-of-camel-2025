@@ -148,8 +148,8 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 ### Day 1, Part 1 + Part 2
 
 <p>
-<a href="fpga/src/day01.ml  target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/Code-day01.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/1  target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
+<a href="fpga/src/day01.ml" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/Code-day01.ml-f85149"></a>
+<a href="https://adventofcode.com/2025/day/1" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
 <a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 
