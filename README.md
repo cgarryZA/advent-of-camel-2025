@@ -1,4 +1,9 @@
 # Christian Garry Advent of Hardcaml 2025
+<p align="center">
+  <img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/snowglobe_camel.png"
+       alt="Advent of Camel logo"
+       width="750"/>
+</p>
 
 <p align="center">
   <a href="#solutions"><img src="https://img.shields.io/badge/Solutions-View-1f6feb?style=for-the-badge"></a>
