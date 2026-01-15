@@ -12,17 +12,35 @@
 A hardware-first exploration of Advent of Code 2025, implementing each puzzle as a **cycle-accurate FPGA design** in **Hardcaml**, using streaming UART I/O, explicit memory pipelines, and finite-state schedulers instead of software control flow.
 
 <a name="internal-nav"></a>
-### Readme Links
-  <a href="#intro"><img src="https://img.shields.io/badge/Introduction-1f6feb?style=for-the-badge"></a>
-  <a href="#setup"><img src="https://img.shields.io/badge/Setup-Guide-1f6feb?style=for-the-badge"></a>
-  <a href="#execution-model"><img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge"></a>
-  <a href="#solutions"><img src="https://img.shields.io/badge/Solutions-Section-1f6feb?style=for-the-badge"></a>
-  <a href="#about"><img src="https://img.shields.io/badge/About-Me-1f6feb?style=for-the-badge"></a>
-  
-### External Links
+### Contents
+<p align="center">
+  <a href="#intro">
+    <img src="https://img.shields.io/badge/Introduction-1f6feb?style=for-the-badge">
+  </a><br/>
+  <a href="#setup">
+    <img src="https://img.shields.io/badge/Setup_Guide-1f6feb?style=for-the-badge">
+  </a><br/>
+  <a href="#execution-model">
+    <img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge">
+  </a><br/>
+  <a href="#solutions">
+    <img src="https://img.shields.io/badge/Solutions-Section-1f6feb?style=for-the-badge">
+  </a><br/>
+  <a href="#about">
+    <img src="https://img.shields.io/badge/About-Me-1f6feb?style=for-the-badge">
+  </a>
+</p>
 
-  <a href="fpga/src"><img src="https://img.shields.io/badge/Code-Browse-f85149?style=for-the-badge"></a>
-  <a href="https://adventofcode.com/2025"><img src="https://img.shields.io/badge/AoC_2025-Problems-facc15?style=for-the-badge"></a>
+### Related Links
+
+<p align="center">
+  <a href="fpga/src">
+    <img src="https://img.shields.io/badge/Code-Browse-f85149?style=for-the-badge">
+  </a><br/>
+  <a href="https://adventofcode.com/2025">
+    <img src="https://img.shields.io/badge/AoC_2025-Problems-facc15?style=for-the-badge">
+  </a>
+</p>
 
 </div>
 
