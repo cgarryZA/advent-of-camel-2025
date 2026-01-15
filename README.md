@@ -73,7 +73,7 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 
 <a name="intro"></a>
 ## Introduction
-<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 This repository contains synthesizable FPGA implementations of selected [Advent of Code 2025](https://adventofcode.com/) problems, targeting streaming execution on the ULX3S platform for the [Advent of FPGA Challenge](https://blog.janestreet.com/advent-of-fpga-challenge-2025/).
 
@@ -94,7 +94,7 @@ I've started with AoC days that had solutions that seemed like they would map we
 
 <a name="setup"></a>
 ## Setup & Installation
-<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 ### Prerequisites
 
@@ -131,7 +131,7 @@ Once the correct opam switch is active, you can build and run the project as des
 
 <a name="user-guide"></a>
 ## Using the repo
-<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 ```bash
 cd fpga
@@ -171,7 +171,7 @@ and tell you exactly where to save it:
 
 <a name="execution-model"></a>
 ## Execution Model
-<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 All designs process their inputs as UART streams and produce their outputs over UART.  
 Each solution follows a deterministic **load–compute–report** structure: input data is received and prepared for processing, the problem-specific algorithm is executed in hardware, and the final results for part 1 and part 2 are formatted as decimal values and transmitted once computation completes.
@@ -179,7 +179,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 <a name="solutions"></a>
 
 ## Solutions 
-<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 <div align="center">
 
 <!-- Calendar GIF -->
@@ -403,7 +403,7 @@ RAM accesses are explicitly staged: addresses are issued in one state and consum
 
 <a name="about"></a>
 ## About Me
-<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
+<a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 I’m Christian Garry, a Graduate Communications Engineer at Siemens and an MSc student in **Scientific Computing and Data Analysis** at Durham University. I previously completed an **MEng in Electronic Engineering** at Durham.
 
