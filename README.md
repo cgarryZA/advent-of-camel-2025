@@ -416,9 +416,9 @@ RAM accesses are explicitly staged: addresses are issued in one state and consum
 ### Day 12
 
 <p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day12.ml"><img src="https://img.shields.io/badge/Code-day12.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/12"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 </p>
 The sample input for Day 12 implies a hard polyomino packing problem requiring search and backtracking. However, the actual puzzle input is degenerate: no region ever requires interlocking shapes.
 
