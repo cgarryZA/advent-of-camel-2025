@@ -70,20 +70,27 @@ cd fpga
 dune runtest
 ```
 
-This runs the testbench for each implemented day against the sample input provided in the Advent of Code problem description.  
+Runs all completed days against the full Advent of Code inputs. 
 Sample inputs live in:
 
 `/inputs/sampleX.txt`
 
-where `X` is the day number with no leading zeros.
+where `X` is the day number (no leading zeros).
 
 ```bash
 cd fpga
 make run-all
-make run-01
+```
+This command runs all completed days against the full input from the Advent of Code website.
+
+```bash
+cd fpga
+make run-XX
 ```
 
-These commands run all days (or a single day) against the full input from the Advent of Code website.
+This command runs a specific day against the full input. 
+Where `XX` is the day number (with leading zero).
+
 
 The AoC rules ban redistribution of input files, so they are `.gitignore`d and must be downloaded manually.  
 If you attempt to run a day without its input present, the runner will print the correct download link and tell you exactly where to save it:
