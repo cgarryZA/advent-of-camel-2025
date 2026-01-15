@@ -7,16 +7,25 @@ open! Util
 (* Helpers                                                      *)
 (* ------------------------------------------------------------ *)
 
-let int64_to_uart_bytes_le ~(n : int) (x : int64) =
+(* Avoid Int64 operator-scope entirely; use Stdlib.Int64.* to prevent operator
+   resolution/shadowing issues under Core/Util opens. *)
+let i64_add (a : int64) (b : int64) : int64 = Stdlib.Int64.add a b
+let i64_sub (a : int64) (b : int64) : int64 = Stdlib.Int64.sub a b
+let i64_mul (a : int64) (b : int64) : int64 = Stdlib.Int64.mul a b
+let i64_min (a : int64) (b : int64) : int64 = if Stdlib.Int64.compare a b <= 0 then a else b
+let i64_max (a : int64) (b : int64) : int64 = if Stdlib.Int64.compare a b <= 0 then b else a
+let i64_lt  (a : int64) (b : int64) : bool  = Stdlib.Int64.compare a b < 0
+let i64_gt  (a : int64) (b : int64) : bool  = Stdlib.Int64.compare a b > 0
+
+let int64_to_uart_bytes_le ~(n : int) (x : int64) : Uart_symbol.t list =
   List.init n ~f:(fun i ->
     let shift = i * 8 in
-    let byte =
-      Int64.(to_int_exn ((shift_right_logical x shift) land 0xffL))
-    in
+    let shifted = Stdlib.Int64.shift_right_logical x shift in
+    let byte = Stdlib.Int64.logand shifted 0xffL |> Stdlib.Int64.to_int in
     Uart_symbol.Byte (Char.of_int_exn byte))
 ;;
 
-let u32_to_uart_bytes_le (x : int) =
+let u32_to_uart_bytes_le (x : int) : Uart_symbol.t list =
   (* x must fit in unsigned 32-bit, but OCaml int is fine for that range *)
   int_to_uart_bytes_le ~n:4 x
 ;;
@@ -29,17 +38,25 @@ let pack_u16x2_le ~(lo : int) ~(hi : int) : Uart_symbol.t list =
 ;;
 
 let require_u32_nonneg (v : int64) ~(what : string) : int =
-  if Int64.(v < 0L) then
+  if i64_lt v 0L then
     failwithf "Day09: %s is negative (%Ld)" what v ()
-  else if Int64.(v > 0xFFFF_FFFFL) then
+  else if i64_gt v 0xFFFF_FFFFL then
     failwithf "Day09: %s does not fit u32 (%Ld)" what v ()
   else
-    Int64.to_int_exn v
+    Stdlib.Int64.to_int v
 ;;
 
 let require_u16 (v : int) ~(what : string) =
   if v < 0 || v > 0xFFFF then
     failwithf "Day09: %s does not fit u16 (%d)" what v ()
+;;
+
+let int64_to_nonneg_int_exn ~(what : string) (v : int64) : int =
+  if i64_lt v 0L then failwithf "Day09: %s is negative (%Ld)" what v () ;
+  (* also keep it sane for array sizes; you can widen later if needed *)
+  if i64_gt v (Stdlib.Int64.of_int Int.max_value) then
+    failwithf "Day09: %s too large for int (%Ld)" what v () ;
+  Stdlib.Int64.to_int v
 ;;
 
 (* ------------------------------------------------------------ *)
@@ -50,15 +67,15 @@ let compress_coords (pts : (int64 * int64) list) =
   let xs =
     pts
     |> List.map ~f:fst
-    |> List.concat_map ~f:(fun x -> Int64.[ x; x + 1L ])
+    |> List.concat_map ~f:(fun x -> [ x; i64_add x 1L ])
   in
   let ys =
     pts
     |> List.map ~f:snd
-    |> List.concat_map ~f:(fun y -> Int64.[ y; y + 1L ])
+    |> List.concat_map ~f:(fun y -> [ y; i64_add y 1L ])
   in
-  let cx = xs |> List.dedup_and_sort ~compare:Int64.compare in
-  let cy = ys |> List.dedup_and_sort ~compare:Int64.compare in
+  let cx = xs |> List.dedup_and_sort ~compare:Stdlib.Int64.compare in
+  let cy = ys |> List.dedup_and_sort ~compare:Stdlib.Int64.compare in
 
   let xid =
     Map.of_alist_exn
@@ -94,23 +111,23 @@ let mark_boundary_tiles
     let x0, y0 = pts.(i) in
     let x1, y1 = pts.((i + 1) mod n) in
 
-    if Int64.(x0 = x1) then begin
-      (* Vertical segment: tiles at x0, y in [min..max] inclusive *)
+    if Stdlib.Int64.compare x0 x1 = 0 then begin
+      (* Vertical segment *)
       let x_idx = Map.find_exn xid x0 in
-      let y_lo = Int64.min y0 y1 in
-      let y_hi = Int64.max y0 y1 in
+      let y_lo = i64_min y0 y1 in
+      let y_hi = i64_max y0 y1 in
       let y0i = Map.find_exn yid y_lo in
-      let y1p1 = Map.find_exn yid Int64.(y_hi + 1L) in
+      let y1p1 = Map.find_exn yid (i64_add y_hi 1L) in
       for y = y0i to y1p1 - 1 do
         mark y x_idx
       done
-    end else if Int64.(y0 = y1) then begin
-      (* Horizontal segment: tiles at y0, x in [min..max] inclusive *)
+    end else if Stdlib.Int64.compare y0 y1 = 0 then begin
+      (* Horizontal segment *)
       let y_idx = Map.find_exn yid y0 in
-      let x_lo = Int64.min x0 x1 in
-      let x_hi = Int64.max x0 x1 in
+      let x_lo = i64_min x0 x1 in
+      let x_hi = i64_max x0 x1 in
       let x0i = Map.find_exn xid x_lo in
-      let x1p1 = Map.find_exn xid Int64.(x_hi + 1L) in
+      let x1p1 = Map.find_exn xid (i64_add x_hi 1L) in
       for x = x0i to x1p1 - 1 do
         mark y_idx x
       done
@@ -130,7 +147,6 @@ let flood_fill_outside ~(boundary : bool array array) =
       Queue.enqueue q (y, x)
   in
 
-  (* Seed with border cells *)
   for x = 0 to w - 1 do
     push 0 x;
     push (h - 1) x
@@ -162,15 +178,17 @@ let build_weighted_prefix_sum
   let h = Array.length outside in
   let w = Array.length outside.(0) in
 
-  (* cell widths/heights in tiles (since coords are integer tile positions) *)
-  let dx =
+  (* Keep dx/dy as int (to reduce int64 usage) but compute via Stdlib.Int64.sub safely. *)
+  let dx : int array =
     Array.init w ~f:(fun i ->
-      Int64.(cx.(i + 1) - cx.(i)))
+      let d = i64_sub cx.(i + 1) cx.(i) in
+      int64_to_nonneg_int_exn ~what:(sprintf "dx[%d]" i) d)
   in
 
-  let dy =
+  let dy : int array =
     Array.init h ~f:(fun j ->
-      Int64.(cy.(j + 1) - cy.(j)))
+      let d = i64_sub cy.(j + 1) cy.(j) in
+      int64_to_nonneg_int_exn ~what:(sprintf "dy[%d]" j) d)
   in
 
   let ps = Array.make_matrix ~dimx:(h + 1) ~dimy:(w + 1) 0L in
@@ -178,17 +196,17 @@ let build_weighted_prefix_sum
   for y = 1 to h do
     let row_sum = ref 0L in
     for x = 1 to w do
-      let allowed =
-        (* Not outside => inside or boundary => allowed *)
-        not outside.(y - 1).(x - 1)
-      in
+      let allowed = not outside.(y - 1).(x - 1) in
       let cell =
         if allowed
-        then Int64.(dx.(x - 1) * dy.(y - 1))
-        else 0L
+        then
+          (* cell area = dx * dy, promoted to int64 *)
+          i64_mul (Stdlib.Int64.of_int dx.(x - 1)) (Stdlib.Int64.of_int dy.(y - 1))
+        else
+          0L
       in
-      row_sum := Int64.(!row_sum + cell);
-      ps.(y).(x) <- Int64.(ps.(y - 1).(x) + !row_sum)
+      row_sum := i64_add !row_sum cell;
+      ps.(y).(x) <- i64_add ps.(y - 1).(x) !row_sum
     done
   done;
   ps
@@ -221,8 +239,8 @@ let parse ?(verbose = false) (filename : string) : Uart_symbol.t list =
     |> List.map ~f:(fun line ->
       match String.split line ~on:',' with
       | [ x; y ] ->
-        Int64.of_string (String.strip x),
-        Int64.of_string (String.strip y)
+        Stdlib.Int64.of_string (String.strip x),
+        Stdlib.Int64.of_string (String.strip y)
       | _ ->
         failwithf "Day09: bad line (expected x,y): %s" line ())
   in
@@ -241,7 +259,6 @@ let parse ?(verbose = false) (filename : string) : Uart_symbol.t list =
   let outside = flood_fill_outside ~boundary in
   let ps = build_weighted_prefix_sum ~cx ~cy ~outside in
 
-  (* Emit header *)
   let magic = 0xD0090001 in
   let out =
     ref

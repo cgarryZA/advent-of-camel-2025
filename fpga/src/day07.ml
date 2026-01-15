@@ -483,6 +483,7 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
       (node_id_of_rc down_r c0)
   in
 
+            
   let newv = indeg_rd -:. 1 in
             
 
@@ -744,7 +745,7 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; indeg_wdata <-- uresize ~width:16 newv
           ; indeg_we    <-- vdd
           ; when_ (newv ==:. 0) [ sm.set_next TopoS0_Append ]
-          ; when_ (newv !=:. 0) [ sm.set_next TopoS1_Read ]
+          ; when_ (newv <>: of_int_trunc ~width:16 0) [ sm.set_next TopoS1_Read ]
           ]
 
         ; TopoS0_Append,
@@ -761,16 +762,15 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
               [ indeg_addr <-- s1_id.value
               ; sm.set_next TopoS1_Commit
               ]
-          ; when_ (~:s1_valid.value) [ sm.set_next TopoRead ]
+          ; when_ (~:(s1_valid.value)) [ sm.set_next TopoRead ]
           ]
 
         ; TopoS1_Commit,
-          [ let newv = indeg_rd -:. 1 in
-            indeg_addr  <-- s1_id.value
+          [ indeg_addr  <-- s1_id.value
           ; indeg_wdata <-- uresize ~width:16 newv
           ; indeg_we    <-- vdd
           ; when_ (newv ==:. 0) [ sm.set_next TopoS1_Append ]
-          ; when_ (newv !=:. 0) [ sm.set_next TopoRead ]
+          ; when_ (newv <>: of_int_trunc ~width:16 0) [ sm.set_next TopoRead ]
           ]
 
         ; TopoS1_Append,
@@ -816,7 +816,7 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
               [ ways_addr <-- s0_id.value
               ; sm.set_next DpGotW0
               ]
-          ; when_ (~:s0_valid.value) [ sm.set_next DpReadW1 ]
+          ; when_ (~:(s0_valid.value)) [ sm.set_next DpReadW1 ]
           ]
 
         ; DpGotW0,
@@ -829,7 +829,7 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
               [ ways_addr <-- s1_id.value
               ; sm.set_next DpGotW1
               ]
-          ; when_ (~:s1_valid.value) [ sm.set_next DpWriteU ]
+          ; when_ (~:(s1_valid.value)) [ sm.set_next DpWriteU ]
           ]
 
         ; DpGotW1,
@@ -849,10 +849,10 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
               ; done_pulse <-- vdd
               ; sm.set_next Done
               ]
-          ; when_ (dp_idx.value !=:. 0)
-              [ dp_idx <-- dp_idx.value -:. 1
-              ; sm.set_next DpReadU
-              ]
+          ; when_ (dp_idx.value <>: of_int_trunc ~width:14 0)
+            [ dp_idx <-- dp_idx.value -:. 1
+            ; sm.set_next DpReadU
+            ]
           ]
 
         ; Done, []
