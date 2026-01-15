@@ -2,7 +2,7 @@
 ### Day 9, Part 1
 
 <p>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
+<a href="../README.md#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day09.ml"><img src="https://img.shields.io/badge/Code-day09.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/9"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
 </p>

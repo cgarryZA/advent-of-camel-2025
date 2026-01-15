@@ -3,7 +3,7 @@
 ### Day 2, Part 1 + Part 2
 
 <p>
-<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
+<a href="../README.md#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
 <a href="fpga/src/day02.ml"><img src="https://img.shields.io/badge/Code-day02.ml-f85149"></a>
 <a href="https://adventofcode.com/2025/day/2"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
 </p>
