@@ -1,0 +1,19 @@
+<a name="day-5"></a>
+### Day 5, Part 1 + Part 2
+
+<p>
+<a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
+<a href="fpga/src/day05.ml"><img src="https://img.shields.io/badge/Code-day05.ml-f85149"></a>
+<a href="https://adventofcode.com/2025/day/5"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
+</p>
+
+This design processes a set of numeric ranges and query items, performing range merging followed by membership testing.
+
+Input data is streamed into RAM and interpreted as two sequences: a list of half-open ranges and a list of individual items. In the first phase, the circuit reads and merges overlapping or adjacent ranges. This is implemented as a single-pass merge engine that maintains a current active range and emits merged ranges back into RAM as they are completed.
+
+For part 2, the design accumulates the total coverage of all merged ranges by summing their lengths during the merge phase.
+
+For part 1, each item is tested against the merged ranges. Items and ranges are both traversed in ascending order, allowing early termination when an item is known to lie outside all remaining ranges. This avoids unnecessary comparisons and ensures the query phase remains linear in the size of the input.
+
+The entire computation is performed without sorting in hardware, relying instead on the problem’s ordering guarantees. All memory accesses are sequential, and the design uses a small finite-state machine to coordinate merge, flush, and query phases.
+
