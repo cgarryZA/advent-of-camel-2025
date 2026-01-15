@@ -180,8 +180,8 @@ module Loader = struct
             uart_rx.valid
             &: phase.is Load_grid
             &: ~:(loaded.value)
-            &: (uart_rx.value <>:. Char.to_int '\n')
         }
+
     ; start_col     = start_col.value
     ; width         = width.value
     ; height        = height.value
