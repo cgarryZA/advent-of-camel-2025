@@ -107,120 +107,41 @@ All designs process their inputs as UART streams and produce their outputs over 
 Each solution follows a deterministic **load–compute–report** structure: input data is received and prepared for processing, the problem-specific algorithm is executed in hardware, and the final results for part 1 and part 2 are formatted as decimal values and transmitted once computation completes.
 
 ---
-
 <a name="solutions"></a>
 ## Solutions
+
 <div align="center">
-<table>
-<tr>
-<td valign="top">
 
-<!-- LEFT: solutions table -->
-<table>
-<tr><th>Day</th><th>Navigate</th></tr>
-<tr>
-<td><b>Day 1</b></td>
-<td>
-<a href="#day-1"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day01.ml"><img src="https://img.shields.io/badge/Code-day01.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/1"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 2</b></td>
-<td>
-<a href="#day-2"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day02.ml"><img src="https://img.shields.io/badge/Code-day02.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/2"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 3</b></td>
-<td>
-<a href="#day-3"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day03.ml"><img src="https://img.shields.io/badge/Code-day03.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/3"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 4</b></td>
-<td>
-<a href="#day-4"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day04.ml"><img src="https://img.shields.io/badge/Code-day04.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/4"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 5</b></td>
-<td>
-<a href="#day-5"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day05.ml"><img src="https://img.shields.io/badge/Code-day05.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/5"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 6</b></td>
-<td>
-<a href="#day-6"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day06.ml"><img src="https://img.shields.io/badge/Code-day06.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/6"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 8</b></td>
-<td>
-<a href="#day-8"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day08.ml"><img src="https://img.shields.io/badge/Code-day08.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/8"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 9</b></td>
-<td>
-<a href="#day-9"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day09.ml"><img src="https://img.shields.io/badge/Code-day09.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/9"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 10</b></td>
-<td>
-<a href="#day-10"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day10.ml"><img src="https://img.shields.io/badge/Code-day10.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/10"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-
-<tr>
-<td><b>Day 11</b></td>
-<td>
-<a href="#day-11"><img src="https://img.shields.io/badge/Read-Section-1f6feb"></a>
-<a href="fpga/src/day11.ml"><img src="https://img.shields.io/badge/Code-day11.ml-f85149"></a>
-<a href="https://adventofcode.com/2025/day/11"><img src="https://img.shields.io/badge/AoC-Problem-facc15"></a>
-</td>
-</tr>
-</table>
-
-</td>
-
-<td valign="top" width="300">
-
-<!-- RIGHT: calendar gif -->
+<!-- Calendar GIF -->
 <img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/calendar.gif"
      alt="Advent calendar progress"
      width="360"/>
 
-</td>
+<br/><br/>
+
+<!-- Calendar-style grid -->
+<table align="center">
+<tr>
+  <td></td>
+  <td><a href="#day-1"><img src="https://img.shields.io/badge/01-Done-22c55e"></a></td>
+  <td><a href="#day-2"><img src="https://img.shields.io/badge/02-Done-22c55e"></a></td>
+  <td><a href="#day-3"><img src="https://img.shields.io/badge/03-Done-22c55e"></a></td>
+  <td><a href="#day-4"><img src="https://img.shields.io/badge/04-Done-22c55e"></a></td>
+  <td><a href="#day-5"><img src="https://img.shields.io/badge/05-Done-22c55e"></a></td>
+  <td><a href="#day-6"><img src="https://img.shields.io/badge/06-Done-22c55e"></a></td>
+</tr>
+
+<tr>
+  <td><img src="https://img.shields.io/badge/07-Pending-3f3f46"></td>
+  <td><a href="#day-8"><img src="https://img.shields.io/badge/08-Done-22c55e"></a></td>
+  <td><a href="#day-9"><img src="https://img.shields.io/badge/09-Done-22c55e"></a></td>
+  <td><a href="#day-10"><img src="https://img.shields.io/badge/10-Done-22c55e"></a></td>
+  <td><a href="#day-11"><img src="https://img.shields.io/badge/11-Done-22c55e"></a></td>
+  <td><img src="https://img.shields.io/badge/12-Pending-3f3f46"></td>
+  <td></td>
 </tr>
 </table>
+
 </div>
 
 ---
