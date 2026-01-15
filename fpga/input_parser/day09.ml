@@ -16,7 +16,8 @@ let int64_to_uart_bytes_le ~(n : int) (x : int64) =
     Uart_symbol.Byte (Char.of_int_exn byte))
 ;;
 
-let int32_to_uart_bytes_le (x : int) =
+let u32_to_uart_bytes_le (x : int) =
+  (* x must fit in unsigned 32-bit, but OCaml int is fine for that range *)
   int_to_uart_bytes_le ~n:4 x
 ;;
 
@@ -24,11 +25,25 @@ let int32_to_uart_bytes_le (x : int) =
 let pack_u16x2_le ~(lo : int) ~(hi : int) : Uart_symbol.t list =
   let lo = lo land 0xFFFF in
   let hi = hi land 0xFFFF in
-  int32_to_uart_bytes_le (lo lor (hi lsl 16))
+  u32_to_uart_bytes_le (lo lor (hi lsl 16))
+;;
+
+let require_u32_nonneg (v : int64) ~(what : string) : int =
+  if Int64.(v < 0L) then
+    failwithf "Day09: %s is negative (%Ld)" what v ()
+  else if Int64.(v > 0xFFFF_FFFFL) then
+    failwithf "Day09: %s does not fit u32 (%Ld)" what v ()
+  else
+    Int64.to_int_exn v
+;;
+
+let require_u16 (v : int) ~(what : string) =
+  if v < 0 || v > 0xFFFF then
+    failwithf "Day09: %s does not fit u16 (%d)" what v ()
 ;;
 
 (* ------------------------------------------------------------ *)
-(* Part 2 preprocessing                                         *)
+(* Coordinate compression for tile-grid + weighted prefix sum    *)
 (* ------------------------------------------------------------ *)
 
 let compress_coords (pts : (int64 * int64) list) =
@@ -55,37 +70,56 @@ let compress_coords (pts : (int64 * int64) list) =
       (module Int64)
       (List.mapi cy ~f:(fun i v -> v, i))
   in
-  cx, cy, xid, yid
+  Array.of_list cx, Array.of_list cy, xid, yid
 ;;
 
-let rasterize_boundary (pts : (int64 * int64) list) xid yid (w : int) (h : int) =
-  let grid = Array.make_matrix ~dimx:h ~dimy:w 0 in
+let mark_boundary_tiles
+    ~(boundary : bool array array)
+    ~(xid : int Map.M(Int64).t)
+    ~(yid : int Map.M(Int64).t)
+    (pts : (int64 * int64) list)
+  =
   let n = List.length pts in
   let pts = Array.of_list pts in
+
+  let mark y x =
+    if y >= 0
+       && y < Array.length boundary
+       && x >= 0
+       && x < Array.length boundary.(0)
+    then boundary.(y).(x) <- true
+  in
 
   for i = 0 to n - 1 do
     let x0, y0 = pts.(i) in
     let x1, y1 = pts.((i + 1) mod n) in
-    let ix0 = Map.find_exn xid x0 in
-    let iy0 = Map.find_exn yid y0 in
-    let ix1 = Map.find_exn xid x1 in
-    let iy1 = Map.find_exn yid y1 in
 
-    if ix0 = ix1 then
-      for y = Int.min iy0 iy1 to Int.max iy0 iy1 - 1 do
-        grid.(y).(ix0) <- 1
+    if Int64.(x0 = x1) then begin
+      (* Vertical segment: tiles at x0, y in [min..max] inclusive *)
+      let x_idx = Map.find_exn xid x0 in
+      let y_lo = Int64.min y0 y1 in
+      let y_hi = Int64.max y0 y1 in
+      let y0i = Map.find_exn yid y_lo in
+      let y1p1 = Map.find_exn yid Int64.(y_hi + 1L) in
+      for y = y0i to y1p1 - 1 do
+        mark y x_idx
       done
-    else if iy0 = iy1 then
-      for x = Int.min ix0 ix1 to Int.max ix0 ix1 - 1 do
-        grid.(iy0).(x) <- 1
+    end else if Int64.(y0 = y1) then begin
+      (* Horizontal segment: tiles at y0, x in [min..max] inclusive *)
+      let y_idx = Map.find_exn yid y0 in
+      let x_lo = Int64.min x0 x1 in
+      let x_hi = Int64.max x0 x1 in
+      let x0i = Map.find_exn xid x_lo in
+      let x1p1 = Map.find_exn xid Int64.(x_hi + 1L) in
+      for x = x0i to x1p1 - 1 do
+        mark y_idx x
       done
-    else
+    end else
       failwith "Day09: non-axis-aligned edge"
-  done;
-  grid
+  done
 ;;
 
-let flood_fill_outside (boundary : int array array) =
+let flood_fill_outside ~(boundary : bool array array) =
   let h = Array.length boundary in
   let w = Array.length boundary.(0) in
   let outside = Array.make_matrix ~dimx:h ~dimy:w false in
@@ -96,16 +130,19 @@ let flood_fill_outside (boundary : int array array) =
       Queue.enqueue q (y, x)
   in
 
+  (* Seed with border cells *)
   for x = 0 to w - 1 do
-    push 0 x; push (h - 1) x
+    push 0 x;
+    push (h - 1) x
   done;
   for y = 0 to h - 1 do
-    push y 0; push y (w - 1)
+    push y 0;
+    push y (w - 1)
   done;
 
   while not (Queue.is_empty q) do
     let y, x = Queue.dequeue_exn q in
-    if not outside.(y).(x) && boundary.(y).(x) = 0 then begin
+    if (not outside.(y).(x)) && (not boundary.(y).(x)) then begin
       outside.(y).(x) <- true;
       push (y + 1) x;
       push (y - 1) x;
@@ -113,19 +150,42 @@ let flood_fill_outside (boundary : int array array) =
       push y (x - 1);
     end
   done;
+
   outside
 ;;
 
-let build_prefix_sum_allowed (allowed : int array array) =
-  let h = Array.length allowed in
-  let w = Array.length allowed.(0) in
-  let ps = Array.make_matrix ~dimx:(h + 1) ~dimy:(w + 1) 0 in
+let build_weighted_prefix_sum
+    ~(cx : int64 array)
+    ~(cy : int64 array)
+    ~(outside : bool array array)
+  =
+  let h = Array.length outside in
+  let w = Array.length outside.(0) in
+
+  (* cell widths/heights in tiles (since coords are integer tile positions) *)
+  let dx =
+    Array.init w ~f:(fun i -> Int64.(cx.(i + 1) - cx.(i)))
+  in
+  let dy =
+    Array.init h ~f:(fun j -> Int64.(cy.(j + 1) - cy.(j)))
+  in
+
+  let ps = Array.make_matrix ~dimx:(h + 1) ~dimy:(w + 1) 0L in
 
   for y = 1 to h do
-    let row_sum = ref 0 in
+    let row_sum = ref 0L in
     for x = 1 to w do
-      row_sum := !row_sum + allowed.(y - 1).(x - 1);
-      ps.(y).(x) <- ps.(y - 1).(x) + !row_sum
+      let allowed =
+        (* Not outside => inside or boundary => allowed *)
+        not outside.(y - 1).(x - 1)
+      in
+      let cell =
+        if allowed
+        then Int64.(dx.(x - 1) * dy.(y - 1))
+        else 0L
+      in
+      row_sum := Int64.(!row_sum + cell);
+      ps.(y).(x) <- Int64.(ps.(y - 1).(x) + !row_sum)
     done
   done;
   ps
@@ -133,6 +193,18 @@ let build_prefix_sum_allowed (allowed : int array array) =
 
 (* ------------------------------------------------------------ *)
 (* Main parser                                                   *)
+(* Stream format (all little-endian u32/u64, final RTS only):
+   word0: 0xD0090001
+   word1: n
+   for i=0..n-1:
+     word: x_i (u32)
+     word: y_i (u32)
+     word: (ix_i | (iy_i<<16))  where ix/iy are indices into cx/cy (line indices)
+   word: ps_w  (= length cx)    (u32)
+   word: ps_h  (= length cy)    (u32)
+   then ps_h * ps_w entries of u64, row-major: ps[y][x]
+   final: RTS true
+*)
 (* ------------------------------------------------------------ *)
 
 let parse ?(verbose = false) (filename : string) : Uart_symbol.t list =
@@ -155,60 +227,50 @@ let parse ?(verbose = false) (filename : string) : Uart_symbol.t list =
   let n = List.length points in
   if n < 2 then failwith "Day09: need at least 2 points";
 
-  (* ---------------- Part 1 stream ---------------- *)
+  let cx, cy, xid, yid = compress_coords points in
+  let w = Array.length cx - 1 in
+  let h = Array.length cy - 1 in
+  if w <= 0 || h <= 0 then failwith "Day09: degenerate compression";
 
-  let part1_bytes =
-    List.concat
-      [ int64_to_uart_bytes_le ~n:8 (Int64.of_int n)
-      ; List.concat_map points ~f:(fun (x, y) ->
-          int64_to_uart_bytes_le ~n:8 x
-          @ int64_to_uart_bytes_le ~n:8 y)
-      ]
+  let boundary = Array.make_matrix ~dimx:h ~dimy:w false in
+  mark_boundary_tiles ~boundary ~xid ~yid points;
+
+  let outside = flood_fill_outside ~boundary in
+  let ps = build_weighted_prefix_sum ~cx ~cy ~outside in
+
+  (* Emit header *)
+  let magic = 0xD0090001 in
+  let out =
+    ref
+      (u32_to_uart_bytes_le magic
+       @ u32_to_uart_bytes_le n)
   in
 
-  (* ---------------- Part 2 preprocessing ---------------- *)
+  (* Emit points + packed indices *)
+  List.iteri points ~f:(fun i (x, y) ->
+    let x_u32 = require_u32_nonneg x ~what:(sprintf "x[%d]" i) in
+    let y_u32 = require_u32_nonneg y ~what:(sprintf "y[%d]" i) in
+    let ix = Map.find_exn xid x in
+    let iy = Map.find_exn yid y in
+    require_u16 ix ~what:(sprintf "ix[%d]" i);
+    require_u16 iy ~what:(sprintf "iy[%d]" i);
+    out :=
+      !out
+      @ u32_to_uart_bytes_le x_u32
+      @ u32_to_uart_bytes_le y_u32
+      @ pack_u16x2_le ~lo:ix ~hi:iy);
 
-  let _cx, _cy, xid, yid = compress_coords points in
-  let w = Map.length xid in
-  let h = Map.length yid in
+  (* Emit ps dimensions (ps_w = len(cx), ps_h = len(cy)) *)
+  let ps_w = Array.length cx in
+  let ps_h = Array.length cy in
+  out := !out @ u32_to_uart_bytes_le ps_w @ u32_to_uart_bytes_le ps_h;
 
-  let boundary = rasterize_boundary points xid yid w h in
-  let outside = flood_fill_outside boundary in
+  (* Emit ps as u64 entries, row-major *)
+  for yy = 0 to ps_h - 1 do
+    for xx = 0 to ps_w - 1 do
+      out := !out @ int64_to_uart_bytes_le ~n:8 ps.(yy).(xx)
+    done
+  done;
 
-  let allowed =
-    Array.init h ~f:(fun y ->
-      Array.init w ~f:(fun x ->
-        if outside.(y).(x) then 0 else 1))
-  in
-
-  let ps = build_prefix_sum_allowed allowed in
-
-  let idx_bytes =
-    points
-    |> List.concat_map ~f:(fun (x, y) ->
-      let xi = Map.find_exn xid x in
-      let yi = Map.find_exn yid y in
-      pack_u16x2_le ~lo:xi ~hi:yi)
-  in
-
-  (* ---------------- Part 2 stream ---------------- *)
-
-  let part2_bytes =
-    List.concat
-      [ int32_to_uart_bytes_le w
-      ; int32_to_uart_bytes_le h
-      ; List.concat_map (List.range 0 (h + 1)) ~f:(fun yy ->
-          List.concat_map (List.range 0 (w + 1)) ~f:(fun xx ->
-            int32_to_uart_bytes_le ps.(yy).(xx)))
-      ; int32_to_uart_bytes_le n
-      ; idx_bytes
-      ]
-  in
-
-  (* ---------------- Final UART stream ---------------- *)
-
-  part1_bytes
-  @ [ Uart_symbol.Rts true; Uart_symbol.Rts false ]
-  @ part2_bytes
-  @ [ Uart_symbol.Rts true ]
+  !out @ [ Uart_symbol.Rts true ]
 ;;

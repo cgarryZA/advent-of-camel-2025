@@ -10,6 +10,8 @@ let uart_fifo_depth  = 32
 let extra_synth_args = []
 
 (* ====================== GRID RAM ====================== *)
+(* Stores 1 bit per input byte: '^' -> 1, everything else -> 0.
+   Layout matches the Python model: width chars + '\n' per row, so stride = width + 1. *)
 
 module Grid_ram = Loadable_pseudo_dual_port_ram.Make (struct
   let width           = 1
@@ -22,17 +24,84 @@ let grid_port_tieoff ~(addr : Signal.t) : Signal.t Grid_ram.Port.t =
   { address = addr; write_data = zero 1; write_enable = gnd }
 ;;
 
-(* ====================== COUNTS RAM (DP) ====================== *)
-(* Ping-pong banks: current row counts (read) -> next row counts (write) *)
+(* ====================== BFS / GRAPH RAMs ====================== *)
 
-module Count_ram = Loadable_pseudo_dual_port_ram.Make (struct
-  let width           = 60
+module Queue_ram = Loadable_pseudo_dual_port_ram.Make (struct
+  let width           = 28  (* row[13:0] || col[13:0] *)
+  let depth           = 16384
+  let num_ports       = 1
+  let zero_on_startup = true
+end)
+
+let queue_port_tieoff ~(addr : Signal.t) : Signal.t Queue_ram.Port.t =
+  { address = addr; write_data = zero 28; write_enable = gnd }
+;;
+
+module Visited_ram = Loadable_pseudo_dual_port_ram.Make (struct
+  let width           = 1
+  let depth           = 16384
+  let num_ports       = 1
+  let zero_on_startup = true
+end)
+
+let visited_port_tieoff ~(addr : Signal.t) : Signal.t Visited_ram.Port.t =
+  { address = addr; write_data = zero 1; write_enable = gnd }
+;;
+
+(* Edges per node (up to 2 successors). Packed 32-bit:
+   [13:0]   succ0_id
+   [27:14]  succ1_id
+   [28]     succ0_valid
+   [29]     succ1_valid
+   [31:30]  0
+*)
+module Edge_ram = Loadable_pseudo_dual_port_ram.Make (struct
+  let width           = 32
+  let depth           = 16384
+  let num_ports       = 1
+  let zero_on_startup = true
+end)
+
+let edge_port_tieoff ~(addr : Signal.t) : Signal.t Edge_ram.Port.t =
+  { address = addr; write_data = zero 32; write_enable = gnd }
+;;
+
+(* Indegree counter per node *)
+module Indeg_ram = Loadable_pseudo_dual_port_ram.Make (struct
+  let width           = 16
+  let depth           = 16384
+  let num_ports       = 1
+  let zero_on_startup = true
+end)
+
+let indeg_port_tieoff ~(addr : Signal.t) : Signal.t Indeg_ram.Port.t =
+  { address = addr; write_data = zero 16; write_enable = gnd }
+;;
+
+(* Topological order list (stores node_id). Dual port:
+   port0 read (topo_head / dp_idx)
+   port1 write (append)
+*)
+module Topo_ram = Loadable_pseudo_dual_port_ram.Make (struct
+  let width           = 14
   let depth           = 16384
   let num_ports       = 2
   let zero_on_startup = true
 end)
 
-let count_port_tieoff ~(addr : Signal.t) : Signal.t Count_ram.Port.t =
+let topo_port_tieoff ~(addr : Signal.t) : Signal.t Topo_ram.Port.t =
+  { address = addr; write_data = zero 14; write_enable = gnd }
+;;
+
+(* Ways DP: ways[node] = number of paths to exits. *)
+module Ways_ram = Loadable_pseudo_dual_port_ram.Make (struct
+  let width           = 60
+  let depth           = 16384
+  let num_ports       = 1
+  let zero_on_startup = true
+end)
+
+let ways_port_tieoff ~(addr : Signal.t) : Signal.t Ways_ram.Port.t =
   { address = addr; write_data = zero 60; write_enable = gnd }
 ;;
 
@@ -83,6 +152,7 @@ module Loader = struct
     let assembled_u16 = concat_msb [ uart_rx.value; tmp_lo.value ] in
     let assembled_u14 = uresize ~width:14 assembled_u16 in
 
+    (* Counts bytes in grid payload only (after headers). *)
     let write_addr =
       reg_fb spec ~width:14
         ~enable:(uart_rx.valid &: phase.is Load_grid &: ~:(loaded.value))
@@ -91,7 +161,6 @@ module Loader = struct
 
     compile
       [ when_ uart_rts [ loaded <-- vdd ]
-
       ; phase.switch
           [ Start_lo, [ when_ uart_rx.valid [ tmp_lo <-- uart_rx.value; phase.set_next Start_hi ] ]
           ; Start_hi, [ when_ uart_rx.valid [ start_col <-- assembled_u14; phase.set_next W_lo ] ]
@@ -121,17 +190,39 @@ module Loader = struct
     S.hierarchical ~name:"loader" ~scope create
 end
 
-(* ====================== DP SWEEP FSM ====================== *)
+(* ====================== FSM ====================== *)
 
 module States = struct
   type t =
     | Loading
-    | Init_counts
-    | Prime0
-    | Prime1
-    | Prime2
-    | Sweep
-    | Next_row
+    | Init_start
+    | QRead
+    | QGot
+    | CellAddr
+    | CellEval
+    | Succ0_Read
+    | Succ0_Commit
+    | Succ1_Read
+    | Succ1_Commit
+    | TopoInit
+    | TopoRead
+    | TopoGot
+    | TopoEdgeGot
+    | TopoS0_Read
+    | TopoS0_Commit
+    | TopoS0_Append
+    | TopoS1_Read
+    | TopoS1_Commit
+    | TopoS1_Append
+    | DpInit
+    | DpReadU
+    | DpGotU
+    | DpEdgeGot
+    | DpReadW0
+    | DpGotW0
+    | DpReadW1
+    | DpGotW1
+    | DpWriteU
     | Done
   [@@deriving enumerate, sexp_of, compare ~localize]
 end
@@ -142,7 +233,8 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
 
   let loader = Loader.hierarchical scope { clock; clear; uart_rx; uart_rts } in
 
-  (* ---- Grid RAM ---- *)
+  (* ---- Instantiate RAMs ---- *)
+
   let grid_ports = Array.init 2 ~f:(fun _ -> Grid_ram.Port.Of_signal.wires ()) in
   let%tydi grid =
     Grid_ram.hierarchical scope
@@ -153,60 +245,73 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
       }
   in
 
-  (* ---- Count banks ---- *)
-  let count_a_ports = Array.init 2 ~f:(fun _ -> Count_ram.Port.Of_signal.wires ()) in
-  let count_b_ports = Array.init 2 ~f:(fun _ -> Count_ram.Port.Of_signal.wires ()) in
-
-  let%tydi count_a =
-    Count_ram.hierarchical scope
+  let queue_ports = [| Queue_ram.Port.Of_signal.wires () |] in
+  let%tydi queue =
+    Queue_ram.hierarchical scope
       { clock; clear
-      ; load_ports     = [| count_port_tieoff ~addr:(zero 14); count_port_tieoff ~addr:(zero 14) |]
+      ; load_ports     = [| queue_port_tieoff ~addr:(zero 14) |]
       ; load_finished  = vdd
-      ; ram_ports      = count_a_ports
-      }
-  in
-  let%tydi count_b =
-    Count_ram.hierarchical scope
-      { clock; clear
-      ; load_ports     = [| count_port_tieoff ~addr:(zero 14); count_port_tieoff ~addr:(zero 14) |]
-      ; load_finished  = vdd
-      ; ram_ports      = count_b_ports
+      ; ram_ports      = queue_ports
       }
   in
 
-  (* bank_sel=0: A=current(read), B=next(write)
-     bank_sel=1: B=current(read), A=next(write) *)
-  let bank_sel = Variable.reg spec ~width:1 in
-
-  let count_rd =
-    mux2 bank_sel.value count_a.read_data.(0) count_b.read_data.(0)
+  let visited_ports = [| Visited_ram.Port.Of_signal.wires () |] in
+  let%tydi visited =
+    Visited_ram.hierarchical scope
+      { clock; clear
+      ; load_ports     = [| visited_port_tieoff ~addr:(zero 14) |]
+      ; load_finished  = vdd
+      ; ram_ports      = visited_ports
+      }
   in
 
-  (* ---- Indices ---- *)
-  let row_idx = Variable.reg spec ~width:14 in
-  let col_idx = Variable.reg spec ~width:14 in
+  let edge_ports = [| Edge_ram.Port.Of_signal.wires () |] in
+  let%tydi edges =
+    Edge_ram.hierarchical scope
+      { clock; clear
+      ; load_ports     = [| edge_port_tieoff ~addr:(zero 14) |]
+      ; load_finished  = vdd
+      ; ram_ports      = edge_ports
+      }
+  in
 
-  (* ---- Sliding window: counts (c-1,c,c+1) and split bits (c-1,c,c+1) ---- *)
-  let left_count  = Variable.reg spec ~width:60 in
-  let mid_count   = Variable.reg spec ~width:60 in
-  let right_count = Variable.reg spec ~width:60 in
+  let indeg_ports = [| Indeg_ram.Port.Of_signal.wires () |] in
+  let%tydi indeg =
+    Indeg_ram.hierarchical scope
+      { clock; clear
+      ; load_ports     = [| indeg_port_tieoff ~addr:(zero 14) |]
+      ; load_finished  = vdd
+      ; ram_ports      = indeg_ports
+      }
+  in
 
-  let left_split  = Variable.reg spec ~width:1 in
-  let mid_split   = Variable.reg spec ~width:1 in
-  let right_split = Variable.reg spec ~width:1 in
+  let topo_ports = Array.init 2 ~f:(fun _ -> Topo_ram.Port.Of_signal.wires ()) in
+  let%tydi topo =
+    Topo_ram.hierarchical scope
+      { clock; clear
+      ; load_ports     = [| topo_port_tieoff ~addr:(zero 14); topo_port_tieoff ~addr:(zero 14) |]
+      ; load_finished  = vdd
+      ; ram_ports      = topo_ports
+      }
+  in
 
-  (* ---- Outputs ---- *)
-  let split_count = Variable.reg spec ~width:60 in
-  let part2_sum   = Variable.reg spec ~width:60 in
-  let done_level  = Variable.reg spec ~width:1 in
-  let done_pulse  = Variable.reg spec ~width:1 in
+  let ways_ports = [| Ways_ram.Port.Of_signal.wires () |] in
+  let%tydi ways =
+    Ways_ram.hierarchical scope
+      { clock; clear
+      ; load_ports     = [| ways_port_tieoff ~addr:(zero 14) |]
+      ; load_finished  = vdd
+      ; ram_ports      = ways_ports
+      }
+  in
 
-  (* ---- Address math for grid (linear byte address, stride=width+1) ---- *)
+  (* ====================== Helpers ====================== *)
+
+  (* grid linear address: r*(width+1) + c *)
   let stride =
     let w28 = uresize ~width:28 loader.width in
     w28 +: of_int_trunc ~width:28 1
   in
-
   let grid_addr (r : Signal.t) (c : Signal.t) =
     let r28 = uresize ~width:28 r in
     let c28 = uresize ~width:28 c in
@@ -216,202 +321,584 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
     uresize ~width:14 sum
   in
 
-  (* ---- RAM control wires (driven by FSM) ---- *)
-  let count_read_addr  = Variable.wire ~default:(zero 14) in
-  let dp_write_addr    = Variable.wire ~default:(zero 14) in
-  let dp_write_data    = Variable.wire ~default:(zero 60) in
-  let dp_write_en      = Variable.wire ~default:gnd in
+  (* node_id for rows 0..height inclusive:
+     id = r*width + c (including exit row r==height) *)
+  let exit_base14 =
+    let h28 = uresize ~width:28 loader.height in
+    let w28 = uresize ~width:28 loader.width in
+    let prod = h28 *: w28 in
+    uresize ~width:14 prod
+  in
+  let node_id_of_rc (r : Signal.t) (c : Signal.t) =
+    let r28 = uresize ~width:28 r in
+    let w28 = uresize ~width:28 loader.width in
+    let c28 = uresize ~width:28 c in
+    let prod = r28 *: w28 in
+    let pw = Signal.width prod in
+    let sum = prod +: uresize ~width:pw c28 in
+    uresize ~width:14 sum
+  in
 
-  let grid_read_addr   = Variable.wire ~default:(zero 14) in
+  (* ====================== Control regs ====================== *)
 
-  (* ---- Hook up grid read port 0 ---- *)
+  (* BFS queue pointers *)
+  let q_head = Variable.reg spec ~width:14 in
+  let q_tail = Variable.reg spec ~width:14 in
+  let q_cnt  = Variable.reg spec ~width:15 in
+
+  (* current node (r,c) *)
+  let cur_r   = Variable.reg spec ~width:14 in
+  let cur_c   = Variable.reg spec ~width:14 in
+  let cur_id  = Variable.reg spec ~width:14 in
+
+  (* successors (r,c,id,valid) *)
+  let s0_r     = Variable.reg spec ~width:14 in
+  let s0_c     = Variable.reg spec ~width:14 in
+  let s0_id    = Variable.reg spec ~width:14 in
+  let s0_valid = Variable.reg spec ~width:1 in
+
+  let s1_r     = Variable.reg spec ~width:14 in
+  let s1_c     = Variable.reg spec ~width:14 in
+  let s1_id    = Variable.reg spec ~width:14 in
+  let s1_valid = Variable.reg spec ~width:1 in
+
+  (* Part outputs *)
+  let part1 = Variable.reg spec ~width:60 in
+  let part2 = Variable.reg spec ~width:60 in
+  let done_level = Variable.reg spec ~width:1 in
+  let done_pulse = Variable.reg spec ~width:1 in
+
+  (* Topo list pointers/counters *)
+  let topo_head = Variable.reg spec ~width:14 in
+  let topo_tail = Variable.reg spec ~width:14 in
+  let topo_cnt  = Variable.reg spec ~width:14 in
+
+  (* topo current u and edge decode *)
+  let topo_u = Variable.reg spec ~width:14 in
+
+  (* DP index and temporaries *)
+  let dp_idx  = Variable.reg spec ~width:14 in
+  let dp_u    = Variable.reg spec ~width:14 in
+  let dp_w0   = Variable.reg spec ~width:60 in
+  let dp_w1   = Variable.reg spec ~width:60 in
+
+  (* Remember start node id (start = (1, start_col) like python reference) *)
+  let start_id = Variable.reg spec ~width:14 in
+
+  (* ====================== Port wires (combinational) ====================== *)
+
+  let grid_read_addr = Variable.wire ~default:(zero 14) () in
+
+  let q_addr  = Variable.wire ~default:(zero 14) () in
+  let q_wdata = Variable.wire ~default:(zero 28) () in
+  let q_we    = Variable.wire ~default:gnd () in
+
+  let vis_addr  = Variable.wire ~default:(zero 14) () in
+  let vis_wdata = Variable.wire ~default:(zero 1) () in
+  let vis_we    = Variable.wire ~default:gnd () in
+
+  let edge_addr  = Variable.wire ~default:(zero 14) () in
+  let edge_wdata = Variable.wire ~default:(zero 32) () in
+  let edge_we    = Variable.wire ~default:gnd () in
+
+  let indeg_addr  = Variable.wire ~default:(zero 14) () in
+  let indeg_wdata = Variable.wire ~default:(zero 16) () in
+  let indeg_we    = Variable.wire ~default:gnd () in
+
+  let topo_addr0  = Variable.wire ~default:(zero 14) () in
+  let topo_addr1  = Variable.wire ~default:(zero 14) () in
+  let topo_wdata1 = Variable.wire ~default:(zero 14) () in
+  let topo_we1    = Variable.wire ~default:gnd () in
+
+  let ways_addr  = Variable.wire ~default:(zero 14) () in
+  let ways_wdata = Variable.wire ~default:(zero 60) () in
+  let ways_we    = Variable.wire ~default:gnd () in
+
+  (* ====================== Connect RAM ports ====================== *)
+
   Grid_ram.Port.Of_signal.assign grid_ports.(0) (grid_port_tieoff ~addr:grid_read_addr.value);
   Grid_ram.Port.Of_signal.assign grid_ports.(1) (grid_port_tieoff ~addr:(zero 14));
 
-  let grid_bit_rd = grid.read_data.(0) in
+  Queue_ram.Port.Of_signal.assign queue_ports.(0)
+    { address = q_addr.value; write_data = q_wdata.value; write_enable = q_we.value };
 
-  (* ---- Hook up count banks ports ---- *)
-  (* Read port0: current bank only *)
-  let a_p0_addr = mux2 bank_sel.value count_read_addr.value (zero 14) in
-  let b_p0_addr = mux2 bank_sel.value (zero 14) count_read_addr.value in
+  Visited_ram.Port.Of_signal.assign visited_ports.(0)
+    { address = vis_addr.value; write_data = vis_wdata.value; write_enable = vis_we.value };
 
-  Count_ram.Port.Of_signal.assign count_a_ports.(0)
-    { address = a_p0_addr; write_data = zero 60; write_enable = gnd };
-  Count_ram.Port.Of_signal.assign count_b_ports.(0)
-    { address = b_p0_addr; write_data = zero 60; write_enable = gnd };
+  Edge_ram.Port.Of_signal.assign edge_ports.(0)
+    { address = edge_addr.value; write_data = edge_wdata.value; write_enable = edge_we.value };
 
-  (* Write port1: next bank only *)
-  let a_p1_addr = mux2 bank_sel.value dp_write_addr.value (zero 14) in
-  let b_p1_addr = mux2 bank_sel.value (zero 14) dp_write_addr.value in
-  let a_p1_we   = bank_sel.value &: dp_write_en.value in
-  let b_p1_we   = (~:bank_sel.value) &: dp_write_en.value in
+  Indeg_ram.Port.Of_signal.assign indeg_ports.(0)
+    { address = indeg_addr.value; write_data = indeg_wdata.value; write_enable = indeg_we.value };
 
-  Count_ram.Port.Of_signal.assign count_a_ports.(1)
-    { address = a_p1_addr; write_data = dp_write_data.value; write_enable = a_p1_we };
-  Count_ram.Port.Of_signal.assign count_b_ports.(1)
-    { address = b_p1_addr; write_data = dp_write_data.value; write_enable = b_p1_we };
+  Topo_ram.Port.Of_signal.assign topo_ports.(0)
+    { address = topo_addr0.value; write_data = zero 14; write_enable = gnd };
+  Topo_ram.Port.Of_signal.assign topo_ports.(1)
+    { address = topo_addr1.value; write_data = topo_wdata1.value; write_enable = topo_we1.value };
 
-  (* ---- Common flags ---- *)
-  let width_minus_1  = loader.width -:. 1 in
-  let height_minus_1 = loader.height -:. 1 in
+  Ways_ram.Port.Of_signal.assign ways_ports.(0)
+    { address = ways_addr.value; write_data = ways_wdata.value; write_enable = ways_we.value };
 
-  let col_last  = col_idx.value ==: width_minus_1 in
-  let last_row  = row_idx.value ==: height_minus_1 in
+  (* ====================== Read data aliases ====================== *)
 
-  (* in Sweep, the arriving count_rd/grid_bit_rd correspond to (col_idx + 2) *)
-  let incoming_col   = col_idx.value +:. 2 in
-  let incoming_valid = incoming_col <: loader.width in
+  let grid_bit_rd   = grid.read_data.(0) in
+  let q_rd          = queue.read_data.(0) in
+  let vis_rd        = visited.read_data.(0) in
+  let indeg_rd      = indeg.read_data.(0) in
+  let edge_rd       = edges.read_data.(0) in
+  let topo_rd       = topo.read_data.(0) in
+  let ways_rd       = ways.read_data.(0) in
 
-  let prefetch_col   = col_idx.value +:. 3 in
-  let prefetch_valid = prefetch_col <: loader.width in
+  (* Edge decode helpers *)
+  let edge_s0_id    = select edge_rd ~high:13 ~low:0 in
+  let edge_s1_id    = select edge_rd ~high:27 ~low:14 in
+  let edge_s0_valid = select edge_rd ~high:28 ~low:28 in
+  let edge_s1_valid = select edge_rd ~high:29 ~low:29 in
 
-  (* ---- Stencil compute for next row count at column c ---- *)
-  (* out[c] = (~s[c])*x[c] + s[c-1]*x[c-1] + s[c+1]*x[c+1] *)
-  let from_down  = mux2 mid_split.value mid_count.value (zero 60) in
-  let from_left  = mux2 left_split.value (zero 60) left_count.value in
-  let from_right = mux2 right_split.value (zero 60) right_count.value in
-  let out_sum    = from_down +: from_left +: from_right in
-  let out_count  = uresize ~width:60 out_sum in
+  let queue_empty = q_cnt.value ==:. 0 in
+  let topo_done   = topo_head.value ==: topo_cnt.value in
 
-  let mid_nonzero = ~:(mid_count.value ==:. 0) in
-  let split_hit   = mid_split.value &: mid_nonzero in
+  let left_ok  = c !=:. 0 in
+  let right_ok = c <: (loader.width -:. 1) in
+
+  let left_c  = c -:. 1 in
+  let right_c = c +:. 1 in
+
+  let down_r  = r +:. 1 in
+  let down_is_exit = down_r ==: loader.height in
+
+  let down_id =
+    mux2 down_is_exit
+      (uresize ~width:14 (exit_base14 +: c))
+      (node_id_of_rc down_r c)
+  in
+
+  let r = select q_rd ~high:27 ~low:14 in
+  let c = select q_rd ~high:13 ~low:0 in
+  let is_exit = r ==: loader.height in
+  let id_exit = exit_base14 +: c in
+  let id_norm = node_id_of_rc r c in
+
+  let is_split = grid_bit_rd in
+  let r = cur_r.value in
+  let c = cur_c.value in
+  let newv = indeg_rd -:. 1 in
+
+  let is_exit = dp_u.value >=: exit_base14 in
+  let val_u =
+    mux2 is_exit
+      (of_int_trunc ~width:60 1)
+      (uresize ~width:60 (dp_w0.value +: dp_w1.value))
+  in
+  
+  let is_exit = dp_u.value >=: exit_base14 in
+            
 
   (* ====================== FSM ====================== *)
+
   compile
-    [ (* defaults (every cycle) *)
-      dp_write_en   <-- gnd
-    ; dp_write_addr <-- zero 14
-    ; dp_write_data <-- zero 60
-    ; count_read_addr <-- zero 14
-    ; grid_read_addr  <-- zero 14
-    ; done_pulse    <-- gnd
+    [ (* default port drives *)
+      grid_read_addr <-- zero 14
+
+    ; q_addr  <-- q_head.value
+    ; q_wdata <-- zero 28
+    ; q_we    <-- gnd
+
+    ; vis_addr  <-- zero 14
+    ; vis_wdata <-- zero 1
+    ; vis_we    <-- gnd
+
+    ; edge_addr  <-- zero 14
+    ; edge_wdata <-- zero 32
+    ; edge_we    <-- gnd
+
+    ; indeg_addr  <-- zero 14
+    ; indeg_wdata <-- zero 16
+    ; indeg_we    <-- gnd
+
+    ; topo_addr0  <-- topo_head.value
+    ; topo_addr1  <-- topo_tail.value
+    ; topo_wdata1 <-- zero 14
+    ; topo_we1    <-- gnd
+
+    ; ways_addr  <-- zero 14
+    ; ways_wdata <-- zero 60
+    ; ways_we    <-- gnd
+
+    ; done_pulse <-- gnd
 
     ; sm.switch
-        [ Loading,
+        [ (* -------------------- LOADING -------------------- *)
+          Loading,
           [ when_ loader.load_finished
-              [ (* init writes go to A by setting next=A (bank_sel=1) *)
-                bank_sel    <-- vdd
-              ; row_idx     <--. 1
-              ; col_idx     <--. 0
+              [ (* start = (1, start_col) *)
+                start_id <-- node_id_of_rc (of_int_trunc ~width:14 1) loader.start_col
 
-              ; left_count  <--. 0
-              ; mid_count   <--. 0
-              ; right_count <--. 0
-              ; left_split  <-- gnd
-              ; mid_split   <-- gnd
-              ; right_split <-- gnd
+              ; q_head <--. 0
+              ; q_tail <--. 0
+              ; q_cnt  <--. 0
 
-              ; split_count <--. 0
-              ; part2_sum   <--. 0
-              ; done_level  <-- gnd
+              ; part1 <--. 0
+              ; part2 <--. 0
+              ; done_level <-- gnd
 
-              ; sm.set_next Init_counts
+              ; topo_head <--. 0
+              ; topo_tail <--. 0
+              ; topo_cnt  <--. 0
+
+              ; sm.set_next Init_start
               ]
           ]
 
-        ; Init_counts,
-          [ (* write A[col] = (col==start_col ? 1 : 0) *)
-            dp_write_en   <-- vdd
-          ; dp_write_addr <-- col_idx.value
-          ; dp_write_data <-- mux2 (col_idx.value ==: loader.start_col)
-                               (of_int_trunc ~width:60 0)
-                               (of_int_trunc ~width:60 1)
+        (* -------------------- INIT START (enqueue + mark visited) -------------------- *)
+        ; Init_start,
+          [ (* enqueue start rc *)
+            q_addr  <--. 0
+          ; q_wdata <-- concat_msb [ of_int_trunc ~width:14 1; loader.start_col ]
+          ; q_we    <-- vdd
+          ; q_head  <--. 0
+          ; q_tail  <--. 1
+          ; q_cnt   <--. 1
 
-          ; when_ col_last
-              [ (* switch to normal: current=A, next=B *)
-                bank_sel <-- gnd
-              ; col_idx  <--. 0
-              ; sm.set_next Prime0
+          ; (* visited[start_id] = 1 *)
+            vis_addr  <-- start_id.value
+          ; vis_wdata <-- vdd
+          ; vis_we    <-- vdd
+
+          ; sm.set_next QRead
+          ]
+
+        (* -------------------- BFS: dequeue phase 0 (address) -------------------- *)
+        ; QRead,
+          [ when_ queue_empty
+              [ sm.set_next TopoInit ]
+          ; when_ (~:queue_empty)
+              [ q_addr <-- q_head.value
+              ; sm.set_next QGot
               ]
-          ; when_ (~:col_last)
-              [ col_idx <-- col_idx.value +:. 1 ]
           ]
 
-        ; Prime0,
-          [ (* request col0 *)
-            count_read_addr <--. 0
-          ; grid_read_addr  <-- grid_addr row_idx.value (zero 14)
+        (* -------------------- BFS: dequeue phase 1 (consume) -------------------- *)
+        ; QGot,
+          [ (* capture (r,c) from q_rd *)
+            cur_r <-- select q_rd ~high:27 ~low:14
+          ; cur_c <-- select q_rd ~high:13 ~low:0
 
-          ; left_count <--. 0
-          ; left_split <-- gnd
-          ; col_idx    <--. 0
+          ; (* pop queue *)
+            q_head <-- q_head.value +:. 1
+          ; q_cnt  <-- q_cnt.value  -:. 1
 
-          ; sm.set_next Prime1
-          ]
+          ; (* compute node_id (including exit row) *)
+            cur_id <-- mux2 is_exit id_norm (uresize ~width:14 id_exit)
 
-        ; Prime1,
-          [ (* capture col0 into mid; request col1 *)
-            mid_count <-- count_rd
-          ; mid_split <-- grid_bit_rd
+          ; (* clear succ valids (will be filled in CellEval) *)
+            s0_valid <-- gnd
+          ; s1_valid <-- gnd
 
-          ; count_read_addr <--. 1
-          ; grid_read_addr  <-- grid_addr row_idx.value (of_int_trunc ~width:14 1)
-
-          ; sm.set_next Prime2
-          ]
-
-        ; Prime2,
-          [ (* capture col1 into right (or 0 if width<2); request col2 *)
-            let col1_valid = (of_int_trunc ~width:14 1) <: loader.width in
-            right_count <-- mux2 col1_valid (zero 60) count_rd
-          ; right_split <-- mux2 col1_valid gnd grid_bit_rd
-
-          ; count_read_addr <--. 2
-          ; grid_read_addr  <-- grid_addr row_idx.value (of_int_trunc ~width:14 2)
-
-          ; sm.set_next Sweep
-          ]
-
-        ; Sweep,
-          [ (* write next[row+1, col_idx] *)
-            dp_write_en   <-- vdd
-          ; dp_write_addr <-- col_idx.value
-          ; dp_write_data <-- out_count
-
-          ; when_ split_hit [ split_count <-- split_count.value +:. 1 ]
-
-          ; when_ last_row
-              [ part2_sum <-- uresize ~width:60 (part2_sum.value +: out_count) ]
-
-          ; (* shift window; incoming is (col_idx+2) *)
-            let incoming_count = mux2 incoming_valid (zero 60) count_rd in
-            let incoming_split = mux2 incoming_valid gnd grid_bit_rd in
-
-            left_count  <-- mid_count.value
-          ; mid_count   <-- right_count.value
-          ; right_count <-- incoming_count
-
-          ; left_split  <-- mid_split.value
-          ; mid_split   <-- right_split.value
-          ; right_split <-- incoming_split
-
-          ; (* issue prefetch for (col_idx+3) for next cycle *)
-            count_read_addr <-- mux2 prefetch_valid (zero 14) prefetch_col
-          ; grid_read_addr  <-- mux2 prefetch_valid
-                               (zero 14)
-                               (grid_addr row_idx.value prefetch_col)
-
-          ; when_ col_last
-              [ (* finished this row *)
-                when_ last_row
-                  [ done_level <-- vdd
-                  ; done_pulse <-- vdd
-                  ; sm.set_next Done
-                  ]
-              ; when_ (~:last_row)
-                  [ sm.set_next Next_row ]
+          ; (* if exit node: record empty edge and go straight to Succ0_Read to skip *)
+            when_ (select q_rd ~high:27 ~low:14 ==: loader.height)
+              [ edge_addr  <-- cur_id.value
+              ; edge_wdata <-- zero 32
+              ; edge_we    <-- vdd
+              ; sm.set_next Succ0_Read
               ]
 
-          ; when_ (~:col_last)
-              [ col_idx <-- col_idx.value +:. 1 ]
+          ; (* otherwise, request grid bit for this cell *)
+            when_ (select q_rd ~high:27 ~low:14 !=: loader.height)
+              [ sm.set_next CellAddr ]
           ]
 
-        ; Next_row,
-          [ (* advance row: next bank becomes current *)
-            bank_sel <-- ~:(bank_sel.value)
-          ; row_idx  <-- row_idx.value +:. 1
-          ; col_idx  <--. 0
-          ; sm.set_next Prime0
+        (* -------------------- BFS: issue grid address for current cell -------------------- *)
+        ; CellAddr,
+          [ grid_read_addr <-- grid_addr cur_r.value cur_c.value
+          ; sm.set_next CellEval
+          ]
+
+        (* -------------------- BFS: evaluate cell and compute successors -------------------- *)
+        ; CellEval,
+          [ (* Python semantics:
+               if splitter '^' => mark splitter reached (part1++), successors: (r,c-1) and (r,c+1) same row
+               else '.'         => successor: (r+1,c) (exit row allowed at r==height)
+           *)
+            (* defaults *)
+            s0_valid <-- gnd
+          ; s1_valid <-- gnd
+
+            (* splitter: part1++ *)
+          ; when_ is_split [ part1 <-- part1.value +:. 1 ]
+
+            (* select based on is_split *)
+            (* succ0 *)
+          ; s0_r  <-- mux2 is_split down_r r
+          ; s0_c  <-- mux2 is_split c left_c
+          ; s0_id <-- mux2 is_split down_id (node_id_of_rc r left_c)
+          ; s0_valid <-- mux2 is_split vdd (uresize ~width:1 left_ok)
+
+            (* succ1 *)
+          ; s1_r  <-- r
+          ; s1_c  <-- right_c
+          ; s1_id <-- node_id_of_rc r right_c
+          ; s1_valid <-- mux2 is_split gnd (uresize ~width:1 right_ok)
+
+            (* If not splitter, only succ0=down is valid. *)
+          ; when_ (~:is_split) [ s0_valid <-- vdd; s1_valid <-- gnd ]
+
+            (* write edge table for this node_id *)
+          ; edge_addr <-- cur_id.value
+          ; edge_wdata <--
+              concat_lsb
+                [ s0_id.value
+                ; s1_id.value
+                ; s0_valid.value
+                ; s1_valid.value
+                ; zero 2
+                ]
+          ; edge_we <-- vdd
+
+          ; sm.set_next Succ0_Read
+          ]
+
+        (* -------------------- BFS: succ0 read (visited + indeg) -------------------- *)
+        ; Succ0_Read,
+          [ when_ s0_valid.value
+              [ vis_addr   <-- s0_id.value
+              ; indeg_addr <-- s0_id.value
+              ; sm.set_next Succ0_Commit
+              ]
+          ; when_ (~:s0_valid.value) [ sm.set_next Succ1_Read ]
+          ]
+
+        (* -------------------- BFS: succ0 commit (indeg++, maybe enqueue) -------------------- *)
+        ; Succ0_Commit,
+          [ (* indeg++ always when edge exists *)
+            indeg_addr  <-- s0_id.value
+          ; indeg_wdata <-- uresize ~width:16 (indeg_rd +:. 1)
+          ; indeg_we    <-- vdd
+
+          ; (* enqueue if not visited *)
+            when_ (~:vis_rd)
+              [ (* visited=1 *)
+                vis_addr  <-- s0_id.value
+              ; vis_wdata <-- vdd
+              ; vis_we    <-- vdd
+
+              ; (* push rc *)
+                q_addr  <-- q_tail.value
+              ; q_wdata <-- concat_msb [ s0_r.value; s0_c.value ]
+              ; q_we    <-- vdd
+              ; q_tail  <-- q_tail.value +:. 1
+              ; q_cnt   <-- q_cnt.value +:. 1
+              ]
+
+          ; sm.set_next Succ1_Read
+          ]
+
+        (* -------------------- BFS: succ1 read (visited + indeg) -------------------- *)
+        ; Succ1_Read,
+          [ when_ s1_valid.value
+              [ vis_addr   <-- s1_id.value
+              ; indeg_addr <-- s1_id.value
+              ; sm.set_next Succ1_Commit
+              ]
+          ; when_ (~:s1_valid.value) [ sm.set_next QRead ]
+          ]
+
+        (* -------------------- BFS: succ1 commit (indeg++, maybe enqueue) -------------------- *)
+        ; Succ1_Commit,
+          [ indeg_addr  <-- s1_id.value
+          ; indeg_wdata <-- uresize ~width:16 (indeg_rd +:. 1)
+          ; indeg_we    <-- vdd
+
+          ; when_ (~:vis_rd)
+              [ vis_addr  <-- s1_id.value
+              ; vis_wdata <-- vdd
+              ; vis_we    <-- vdd
+
+              ; q_addr  <-- q_tail.value
+              ; q_wdata <-- concat_msb [ s1_r.value; s1_c.value ]
+              ; q_we    <-- vdd
+              ; q_tail  <-- q_tail.value +:. 1
+              ; q_cnt   <-- q_cnt.value +:. 1
+              ]
+
+          ; sm.set_next QRead
+          ]
+
+        (* -------------------- TOPO INIT -------------------- *)
+        ; TopoInit,
+          [ topo_head <--. 0
+          ; topo_tail <--. 1
+          ; topo_cnt  <--. 1
+
+          ; topo_addr1  <--. 0
+          ; topo_wdata1 <-- start_id.value
+          ; topo_we1    <-- vdd
+
+          ; sm.set_next TopoRead
+          ]
+
+        (* -------------------- TOPO READ u -------------------- *)
+        ; TopoRead,
+          [ when_ topo_done [ sm.set_next DpInit ]
+          ; when_ (~:topo_done)
+              [ topo_addr0 <-- topo_head.value
+              ; sm.set_next TopoGot
+              ]
+          ]
+
+        (* -------------------- TOPO GOT u (topo_rd is for topo_head) -------------------- *)
+        ; TopoGot,
+          [ topo_u    <-- topo_rd
+          ; topo_head <-- topo_head.value +:. 1
+
+          ; (* request edge for u *)
+            edge_addr <-- topo_rd
+          ; sm.set_next TopoEdgeGot
+          ]
+
+        (* -------------------- TOPO: consume edge_rd -------------------- *)
+        ; TopoEdgeGot,
+          [ (* capture edge successors into s0/s1 regs (reuse) *)
+            s0_id    <-- edge_s0_id
+          ; s1_id    <-- edge_s1_id
+          ; s0_valid <-- edge_s0_valid
+          ; s1_valid <-- edge_s1_valid
+
+          ; sm.set_next TopoS0_Read
+          ]
+
+        (* -------------------- TOPO succ0 read indeg -------------------- *)
+        ; TopoS0_Read,
+          [ when_ s0_valid.value
+              [ indeg_addr <-- s0_id.value
+              ; sm.set_next TopoS0_Commit
+              ]
+          ; when_ (~:s0_valid.value) [ sm.set_next TopoS1_Read ]
+          ]
+
+        (* -------------------- TOPO succ0 commit (indeg--, maybe append) -------------------- *)
+        ; TopoS0_Commit,
+          [ indeg_addr  <-- s0_id.value
+          ; indeg_wdata <-- uresize ~width:16 newv
+          ; indeg_we    <-- vdd
+
+          ; when_ (newv ==:. 0) [ sm.set_next TopoS0_Append ]
+          ; when_ (newv !=:. 0) [ sm.set_next TopoS1_Read ]
+          ]
+
+        ; TopoS0_Append,
+          [ topo_addr1  <-- topo_tail.value
+          ; topo_wdata1 <-- s0_id.value
+          ; topo_we1    <-- vdd
+          ; topo_tail   <-- topo_tail.value +:. 1
+          ; topo_cnt    <-- topo_cnt.value +:. 1
+          ; sm.set_next TopoS1_Read
+          ]
+
+        (* -------------------- TOPO succ1 read indeg -------------------- *)
+        ; TopoS1_Read,
+          [ when_ s1_valid.value
+              [ indeg_addr <-- s1_id.value
+              ; sm.set_next TopoS1_Commit
+              ]
+          ; when_ (~:s1_valid.value) [ sm.set_next TopoRead ]
+          ]
+
+        (* -------------------- TOPO succ1 commit (indeg--, maybe append) -------------------- *)
+        ; TopoS1_Commit,
+          [ indeg_addr  <-- s1_id.value
+          ; indeg_wdata <-- uresize ~width:16 newv
+          ; indeg_we    <-- vdd
+
+          ; when_ (newv ==:. 0) [ sm.set_next TopoS1_Append ]
+          ; when_ (newv !=:. 0) [ sm.set_next TopoRead ]
+          ]
+
+        ; TopoS1_Append,
+          [ topo_addr1  <-- topo_tail.value
+          ; topo_wdata1 <-- s1_id.value
+          ; topo_we1    <-- vdd
+          ; topo_tail   <-- topo_tail.value +:. 1
+          ; topo_cnt    <-- topo_cnt.value +:. 1
+          ; sm.set_next TopoRead
+          ]
+
+        (* -------------------- DP INIT -------------------- *)
+        ; DpInit,
+          [ (* dp_idx = topo_cnt - 1 *)
+            dp_idx <-- topo_cnt.value -:. 1
+          ; sm.set_next DpReadU
+          ]
+
+        (* -------------------- DP: read topo[dp_idx] -------------------- *)
+        ; DpReadU,
+          [ topo_addr0 <-- dp_idx.value
+          ; sm.set_next DpGotU
+          ]
+
+        (* -------------------- DP: got u, request edge -------------------- *)
+        ; DpGotU,
+          [ dp_u     <-- topo_rd
+          ; edge_addr <-- topo_rd
+          ; sm.set_next DpEdgeGot
+          ]
+
+        (* -------------------- DP: got edge, decide exit / read ways -------------------- *)
+        ; DpEdgeGot,
+          [ s0_id    <-- edge_s0_id
+          ; s1_id    <-- edge_s1_id
+          ; s0_valid <-- edge_s0_valid
+          ; s1_valid <-- edge_s1_valid
+
+          ; dp_w0 <--. 0
+          ; dp_w1 <--. 0
+
+          ; when_ is_exit [ sm.set_next DpWriteU ]
+          ; when_ (~:is_exit) [ sm.set_next DpReadW0 ]
+          ]
+
+        ; DpReadW0,
+          [ when_ s0_valid.value
+              [ ways_addr <-- s0_id.value
+              ; sm.set_next DpGotW0
+              ]
+          ; when_ (~:s0_valid.value) [ sm.set_next DpReadW1 ]
+          ]
+
+        ; DpGotW0,
+          [ dp_w0 <-- ways_rd
+          ; sm.set_next DpReadW1
+          ]
+
+        ; DpReadW1,
+          [ when_ s1_valid.value
+              [ ways_addr <-- s1_id.value
+              ; sm.set_next DpGotW1
+              ]
+          ; when_ (~:s1_valid.value) [ sm.set_next DpWriteU ]
+          ]
+
+        ; DpGotW1,
+          [ dp_w1 <-- ways_rd
+          ; sm.set_next DpWriteU
+          ]
+
+        ; DpWriteU,
+          [ ways_addr  <-- dp_u.value
+          ; ways_wdata <-- val_u
+          ; ways_we    <-- vdd
+
+          ; when_ (dp_u.value ==: start_id.value) [ part2 <-- val_u ]
+
+          ; when_ (dp_idx.value ==:. 0)
+              [ done_level <-- vdd
+              ; done_pulse <-- vdd
+              ; sm.set_next Done
+              ]
+          ; when_ (dp_idx.value !=:. 0)
+              [ dp_idx <-- dp_idx.value -:. 1
+              ; sm.set_next DpReadU
+              ]
           ]
 
         ; Done, []
@@ -422,8 +909,8 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   let%tydi { byte_out } =
     Print_decimal_outputs.hierarchical scope
       { clock; clear
-      ; part1 = { value = split_count.value; valid = done_pulse.value }
-      ; part2 = { value = part2_sum.value; valid = done_pulse.value }
+      ; part1 = { value = part1.value; valid = done_pulse.value }
+      ; part2 = { value = part2.value; valid = done_pulse.value }
       }
   in
 
