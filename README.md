@@ -81,6 +81,10 @@ This project is based on the [Jane Street Hardcaml Template Project](https://git
 
 I've started with AoC days that had solutions that seemed like they would map well to hardware implementations and will see how many I can finish before the deadline.
 
+<img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/Animation.gif"
+     alt="Advent calendar progress"
+     width="560"/>
+
 <a name="setup"></a>
 ## Setup & Installation
 <a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
