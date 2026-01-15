@@ -110,7 +110,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 
 <a name="solutions"></a>
 ## Solutions
-
+<div align="center">
 <table>
 <tr><th>Day</th><th>Navigate</th></tr>
 
@@ -204,7 +204,7 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 </td>
 </tr>
 </table>
-
+</div>
 ---
 
 <a name="day-1"></a>
