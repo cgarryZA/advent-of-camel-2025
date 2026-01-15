@@ -176,7 +176,11 @@ module Loader = struct
     ; ram_write =
         { address      = write_addr
         ; write_data   = uart_rx.value ==:. Char.to_int '^'
-        ; write_enable = uart_rx.valid &: phase.is Load_grid &: ~:(loaded.value)
+        ; write_enable =
+            uart_rx.valid
+            &: phase.is Load_grid
+            &: ~:(loaded.value)
+            &: (uart_rx.value <>:. Char.to_int '\n')
         }
     ; start_col     = start_col.value
     ; width         = width.value
@@ -311,10 +315,8 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   (* ====================== Helpers ====================== *)
 
   (* grid linear address: r*(width+1) + c *)
-  let stride =
-    let w28 = uresize ~width:28 loader.width in
-    w28 +: of_int_trunc ~width:28 1
-  in
+  let stride = uresize ~width:28 loader.width in
+  
   let grid_addr (r : Signal.t) (c : Signal.t) =
     let r28 = uresize ~width:28 r in
     let c28 = uresize ~width:28 c in
@@ -409,6 +411,8 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   let ways_wdata = Variable.wire ~default:(zero 60) () in
   let ways_we    = Variable.wire ~default:gnd () in
 
+  let cur_is_split = Variable.reg spec ~width:1 in
+
   (* ====================== Connect RAM ports ====================== *)
 
   Grid_ram.Port.Of_signal.assign grid_ports.(0) (grid_port_tieoff ~addr:grid_read_addr.value);
@@ -457,7 +461,7 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   let q_is_exit = q_r ==: loader.height in
   let q_id_exit = uresize ~width:14 (exit_base14 +: q_c) in
   let q_id_norm = node_id_of_rc q_r q_c in
-  let q_cur_id  = mux2 q_is_exit q_id_norm q_id_exit in
+  let q_cur_id  = mux2 q_is_exit q_id_exit q_id_norm in
 
   let queue_empty = q_cnt.value ==:. 0 in
   let topo_done   = topo_head.value ==: topo_cnt.value in
@@ -495,16 +499,16 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
   in
 
   (* s0 = left (if splitter) else down *)
-  let s0_r_n     = mux2 is_split r0 down_r in
-  let s0_c_n     = mux2 is_split left_c c0 in
-  let s0_id_n    = mux2 is_split (node_id_of_rc r0 left_c) down_id in
-  let s0_valid_n = mux2 is_split left_ok vdd in
+  let s0_r_n     = mux2 cur_is_split.value r0 down_r in
+  let s0_c_n     = mux2 cur_is_split.value left_c c0 in
+  let s0_id_n    = mux2 cur_is_split.value (node_id_of_rc r0 left_c) down_id in
+  let s0_valid_n = mux2 cur_is_split.value left_ok vdd in
 
   (* s1 = right (only if splitter) *)
   let s1_r_n     = r0 in
   let s1_c_n     = right_c in
-  let s1_id_n    = mux2 is_split (node_id_of_rc r0 right_c) (zero 14) in
-  let s1_valid_n = is_split &: right_ok in
+  let s1_id_n    = mux2 cur_is_split.value (node_id_of_rc r0 right_c) (zero 14) in
+  let s1_valid_n = cur_is_split.value &: right_ok in
 
   let newv = indeg_rd -:. 1 in
 
@@ -619,33 +623,38 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ]
 
         ; CellEval,
-          [ (* latch successors into regs for the RAM-latency states that follow *)
-            when_ is_split
-              [ part1 <-- part1.value +:. 1 ]
-          ; s0_r     <-- s0_r_n
-          ; s0_c     <-- s0_c_n
-          ; s0_id    <-- s0_id_n
-          ; s0_valid <-- uresize ~width:1 s0_valid_n
+            [ (* HOLD grid address so grid_bit_rd is correct regardless of sync/async read behavior *)
+              grid_read_addr <-- grid_addr cur_r.value cur_c.value
 
-          ; s1_r     <-- s1_r_n
-          ; s1_c     <-- s1_c_n
-          ; s1_id    <-- s1_id_n
-          ; s1_valid <-- uresize ~width:1 s1_valid_n
+            ; (* latch successors into regs for the RAM-latency states that follow *)
+              cur_is_split <-- is_split
+            ; when_ is_split
+                [ part1 <-- part1.value +:. 1 ]
+            ; s0_r     <-- s0_r_n
+            ; s0_c     <-- s0_c_n
+            ; s0_id    <-- s0_id_n
+            ; s0_valid <-- uresize ~width:1 s0_valid_n
 
-          ; (* write edge table for cur_id (CRITICAL: use *_n, not stale regs) *)
-            edge_addr <-- cur_id.value
-          ; edge_wdata <--
-              concat_lsb
-                [ s0_id_n
-                ; s1_id_n
-                ; uresize ~width:1 s0_valid_n
-                ; uresize ~width:1 s1_valid_n
-                ; zero 2
-                ]
-          ; edge_we <-- vdd
+            ; s1_r     <-- s1_r_n
+            ; s1_c     <-- s1_c_n
+            ; s1_id    <-- s1_id_n
+            ; s1_valid <-- uresize ~width:1 s1_valid_n
 
-          ; sm.set_next Succ0_Read
-          ]
+            ; (* write edge table for cur_id (CRITICAL: use *_n, not stale regs) *)
+              edge_addr <-- cur_id.value
+            ; edge_wdata <--
+                concat_lsb
+                  [ s0_id_n
+                  ; s1_id_n
+                  ; uresize ~width:1 s0_valid_n
+                  ; uresize ~width:1 s1_valid_n
+                  ; zero 2
+                  ]
+            ; edge_we <-- vdd
+
+            ; sm.set_next Succ0_Read
+            ]
+
 
         ; Succ0_Read,
           [ when_ s0_valid.value
