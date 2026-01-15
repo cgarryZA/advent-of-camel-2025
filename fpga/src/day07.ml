@@ -207,6 +207,7 @@ module States = struct
     | TopoRead
     | TopoGot
     | TopoEdgeGot
+    | TopoEdgeRead
     | TopoS0_Read
     | TopoS0_Commit
     | TopoS0_Append
@@ -217,6 +218,7 @@ module States = struct
     | DpReadU
     | DpGotU
     | DpEdgeGot
+    | DpEdgeRead
     | DpReadW0
     | DpGotW0
     | DpReadW1
@@ -728,6 +730,11 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
               ]
           ]
 
+        ; TopoEdgeRead,
+          [ (* wait 1 cycle for Edge_ram read *)
+            sm.set_next TopoEdgeGot
+          ]
+
         ; TopoGot,
           [ topo_u    <-- topo_rd
           ; topo_head <-- topo_head.value +:. 1
@@ -735,12 +742,11 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next TopoEdgeGot
           ]
 
-        ; TopoEdgeGot,
-          [ s0_id    <-- edge_s0_id
-          ; s1_id    <-- edge_s1_id
-          ; s0_valid <-- edge_s0_valid
-          ; s1_valid <-- edge_s1_valid
-          ; sm.set_next TopoS0_Read
+        ; TopoGot,
+          [ topo_u    <-- topo_rd
+          ; topo_head <-- topo_head.value +:. 1
+          ; edge_addr <-- topo_rd
+          ; sm.set_next TopoEdgeRead
           ]
 
         ; TopoS0_Read,
@@ -805,11 +811,15 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ]
 
         ; DpGotU,
-          [ dp_u     <-- topo_rd
+          [ dp_u      <-- topo_rd
           ; edge_addr <-- topo_rd
-          ; sm.set_next DpEdgeGot
+          ; sm.set_next DpEdgeRead
           ]
 
+        ; DpEdgeRead,
+          [ (* wait 1 cycle for Edge_ram read *)
+            sm.set_next DpEdgeGot
+          ]
         ; DpEdgeGot,
           [ s0_id    <-- edge_s0_id
           ; s1_id    <-- edge_s1_id
