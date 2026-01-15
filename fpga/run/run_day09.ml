@@ -10,5 +10,6 @@ let () =
     ~day
     ~hierarchical:Design.hierarchical
     ~parser:Parser.parse
+    ~run_cycles:10_000_000
     ()
 ;;

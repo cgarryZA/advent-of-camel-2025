@@ -9,13 +9,17 @@ let clock_freq       = Ulx3s.Clock_freq.Clock_25mhz
 let uart_fifo_depth  = 32
 let extra_synth_args = []
 
-let ram_depth = 131072
-let addr_bits = 17
+(* let ram_depth = 131072
+let addr_bits = 17  *)
+
+(* SIMULATION-ONLY IMPLEMENTATION
+   Full weighted prefix-sum grid requires ~2 MiB RAM.
+   This will NOT synthesize on ULX3S. *)
+let ram_depth = 524288
+let addr_bits = 19
 
 (* ====================== RAM ====================== *)
 
-(* NOTE: Day09 needs to hold points + a weighted prefix-sum table.
-   Depth here is larger than earlier days by design. *)
 module Ram = Loadable_pseudo_dual_port_ram.Make (struct
   let width           = 32
   let depth           = ram_depth
@@ -42,6 +46,7 @@ module Loader = struct
       ; ram_write     : 'a Ram.Port.t
       ; data_words    : 'a [@bits addr_bits]
       ; uart_rx_ready : 'a
+      ; overflow      : 'a
       }
     [@@deriving hardcaml]
   end
@@ -55,48 +60,45 @@ module Loader = struct
     let loaded   = Variable.reg spec ~width:1 in
     let overflow = Variable.reg spec ~width:1 in
 
-    let word_count =
-      reg_fb spec ~width:addr_bits
-        ~enable:(word_in.valid &: ~:(loaded.value) &: ~:(overflow.value))
-        ~f:(fun x -> x +:. 1)
-    in
+    let word_count = Variable.reg spec ~width:addr_bits in
+    let max_addr   = of_int_trunc ~width:addr_bits (ram_depth - 1) in
 
-    let max_addr =
-      of_int_trunc ~width:addr_bits (ram_depth - 1)
-    in
+    (* Write-enable stops once overflow is set, but RX_READY does NOT. *)
+    let we = word_in.valid &: ~:(loaded.value) &: ~:(overflow.value) in
 
     compile
-      [ (* Detect overflow on attempted write to last address *)
-        when_
-          (word_in.valid &: ~:(loaded.value) &: (word_count ==: max_addr))
-          [ overflow <-- vdd ]
+      [ (* Advance address, saturating at max_addr, and latch overflow
+           *after* successfully writing the last word. *)
+        when_ we
+          [ if_
+              (word_count.value ==: max_addr)
+              [ overflow <-- vdd ]
+              [ word_count <-- word_count.value +:. 1 ]
+          ]
+
       ; (* End-of-load: sticky *)
         when_ uart_rts
           [ loaded <-- vdd ]
       ];
 
-    let we = word_in.valid &: ~:(loaded.value) &: ~:(overflow.value) in
-
-    (* Count words written (include last word if RTS coincides with write) *)
+    (* data_words is informational; it’s not used by the algo. Keep it stable. *)
     let data_words = Variable.reg spec ~width:addr_bits in
-    let word_count_written =
-      mux2 we (word_count +:. 1) word_count
-    in
-
     compile
       [ when_ uart_rts
-          [ data_words <-- word_count_written ]
+          [ data_words <-- word_count.value ]
       ];
 
     { O.
       load_finished = loaded.value
     ; ram_write =
-        { address      = word_count
+        { address      = word_count.value
         ; write_data   = word_in.value
         ; write_enable = we
         }
     ; data_words    = data_words.value
-    ; uart_rx_ready = ~:(loaded.value) &: ~:(overflow.value)
+      (* CRITICAL: ignore overflow for uart_rx_ready so the sender can finish and assert RTS. *)
+    ; uart_rx_ready = ~:(loaded.value)
+    ; overflow      = overflow.value
     }
   ;;
 
@@ -111,38 +113,21 @@ end
 module States = struct
   type t =
     | Loading
-
-    | Magic_read
-    | Magic_consume
-    | N_read
-    | N_consume
-    | Meta_w_read
-    | Meta_w_consume
-    | Meta_h_read
-    | Meta_h_consume
-
-    | I_read_x
-    | I_consume_x
-    | I_read_y
-    | I_consume_y
-    | I_read_idx
-    | I_consume_idx
-
+    | Magic_read | Magic_consume
+    | N_read | N_consume
+    | Meta_w_read | Meta_w_consume
+    | Meta_h_read | Meta_h_consume
+    | I_read_x | I_consume_x
+    | I_read_y | I_consume_y
+    | I_read_idx | I_consume_idx
     | J_init
-    | J_read_x
-    | J_consume_x
-    | J_read_y
-    | J_consume_y
-    | J_read_idx
-    | J_consume_idx
-
+    | J_read_x | J_consume_x
+    | J_read_y | J_consume_y
+    | J_read_idx | J_consume_idx
     | Pair_compute
-    | Ps_lo_read
-    | Ps_lo_consume
-    | Ps_hi_read
-    | Ps_hi_consume
+    | Ps_lo_read | Ps_lo_consume
+    | Ps_hi_read | Ps_hi_consume
     | Pair_evaluate
-
     | Next_j
     | Next_i
     | Done
@@ -155,45 +140,28 @@ let algo
     ~(ram0_rd : Signal.t)
     ~(ram1_rd : Signal.t)
     ~(load_finished : Signal.t)
+    ~(load_overflow : Signal.t)
   =
   let spec = Reg_spec.create ~clock ~clear () in
   let sm   = State_machine.create (module States) spec in
 
-  (* ---------------------------------------------------------- *)
-  (* IMPORTANT: sync RAM needs "read request" address to be      *)
-  (* combinational. We keep a reg for "hold last", but we drive  *)
-  (* the actual port address with a wire.                        *)
-  (* ---------------------------------------------------------- *)
-
   let p0_addr_r = Variable.reg spec ~width:addr_bits in
   let p1_addr_r = Variable.reg spec ~width:addr_bits in
-
   let p0_addr = Variable.wire ~default:p0_addr_r.value () in
   let p1_addr = Variable.wire ~default:p1_addr_r.value () in
 
-  let p0_req (a : Signal.t) =
-    [ p0_addr   <-- a
-    ; p0_addr_r <-- a
-    ]
-  in
-  let p1_req (a : Signal.t) =
-    [ p1_addr   <-- a
-    ; p1_addr_r <-- a
-    ]
-  in
+  let p0_req (a : Signal.t) = [ p0_addr <-- a; p0_addr_r <-- a ] in
+  let p1_req (a : Signal.t) = [ p1_addr <-- a; p1_addr_r <-- a ] in
 
-  (* Parsed header *)
   let n_points   = Variable.reg spec ~width:32 in
   let meta_base  = Variable.reg spec ~width:addr_bits in
   let base_ps    = Variable.reg spec ~width:addr_bits in
   let ps_w       = Variable.reg spec ~width:32 in
   let ps_h       = Variable.reg spec ~width:32 in
 
-  (* Loop indices *)
   let i_idx = Variable.reg spec ~width:32 in
   let j_idx = Variable.reg spec ~width:32 in
 
-  (* Point caches *)
   let i_x   = Variable.reg spec ~width:32 in
   let i_y   = Variable.reg spec ~width:32 in
   let i_ix  = Variable.reg spec ~width:16 in
@@ -204,20 +172,15 @@ let algo
   let j_ix  = Variable.reg spec ~width:16 in
   let j_iy  = Variable.reg spec ~width:16 in
 
-  (* Results *)
   let max_p1 = Variable.reg spec ~width:64 in
   let max_p2 = Variable.reg spec ~width:64 in
-
-  (* Current pair area *)
   let pair_area = Variable.reg spec ~width:64 in
 
-  (* Prefix sum query bounds (line indices) *)
   let x_lo = Variable.reg spec ~width:32 in
   let x_hi = Variable.reg spec ~width:32 in
   let y_lo = Variable.reg spec ~width:32 in
   let y_hi = Variable.reg spec ~width:32 in
 
-  (* ps read micro-sequencer: step 0..3 for A,B,C,D *)
   let ps_step   = Variable.reg spec ~width:2 in
   let ps_lo_tmp = Variable.reg spec ~width:32 in
   let ps_a      = Variable.reg spec ~width:64 in
@@ -228,50 +191,29 @@ let algo
   let done_pending = Variable.reg spec ~width:1 in
   let done_out     = reg spec done_pending.value in
 
-
-  (* ---------------------------------------------------------- *)
-  (* Helpers: address math                                       *)
-  (* ---------------------------------------------------------- *)
-
-  let word2_of_u32 (x : Signal.t) =
-    (* x * 2 = concat_lsb [0; x] *)
-    concat_lsb [ gnd; x ]
-  in
-
+  let word2_of_u32 (x : Signal.t) = concat_lsb [ gnd; x ] in
   let mul3_u32 (x : Signal.t) =
-    (* x*3 = x + (x*2) *)
     let x2 = word2_of_u32 x in
     uresize ~width:32 (x +: uresize ~width:32 x2)
   in
-
   let point_base_addr (idx : Signal.t) =
-    (* base = 2 + 3*idx *)
     let idx3 = mul3_u32 idx in
-    uresize ~width:addr_bits
-      ((of_int_trunc ~width:addr_bits 2) +: uresize ~width:addr_bits idx3)
+    uresize ~width:addr_bits ((of_int_trunc ~width:addr_bits 2) +: uresize ~width:addr_bits idx3)
   in
-
   let ps_entry_addr_lo ~(yy : Signal.t) ~(xx : Signal.t) =
-    (* addr = base_ps + 2*(yy*ps_w + xx) *)
     let prod = yy *: ps_w.value in
     let idx  = uresize ~width:32 (uresize ~width:32 prod +: xx) in
     let idx2 = word2_of_u32 idx in
     uresize ~width:addr_bits (base_ps.value +: uresize ~width:addr_bits idx2)
   in
-
   let ps_entry_addr_hi ~(yy : Signal.t) ~(xx : Signal.t) =
     ps_entry_addr_lo ~yy ~xx +:. 1
   in
-
-  (* ---------------------------------------------------------- *)
-  (* Pair math                                                   *)
-  (* ---------------------------------------------------------- *)
 
   let abs_diff_u32 (a : Signal.t) (b : Signal.t) =
     let a_ge_b = a >=: b in
     mux2 a_ge_b (a -: b) (b -: a)
   in
-
   let compute_area_u32 (x1 : Signal.t) (y1 : Signal.t) (x2 : Signal.t) (y2 : Signal.t) =
     let dx  = abs_diff_u32 x1 x2 in
     let dy  = abs_diff_u32 y1 y2 in
@@ -280,16 +222,9 @@ let algo
     uresize ~width:64 (dx1 *: dy1)
   in
 
-  (* For bounds, indices are 16-bit; we need min/max and max+1 *)
   let min_u16 (a : Signal.t) (b : Signal.t) = mux2 (a <=: b) a b in
   let max_u16 (a : Signal.t) (b : Signal.t) = mux2 (a <=: b) b a in
 
-  (* Choose (yy,xx) for current ps_step:
-     0: A = ps[y_hi][x_hi]
-     1: B = ps[y_lo][x_hi]
-     2: C = ps[y_hi][x_lo]
-     3: D = ps[y_lo][x_lo]
-  *)
   let ps_x_sel =
     mux ps_step.value [ x_hi.value; x_hi.value; x_lo.value; x_lo.value ]
   in
@@ -297,7 +232,6 @@ let algo
     mux ps_step.value [ y_hi.value; y_lo.value; y_hi.value; y_lo.value ]
   in
 
-  (* bounds for Part 2 prefix-sum query *)
   let ix_lo = min_u16 i_ix.value j_ix.value in
   let ix_hi = max_u16 i_ix.value j_ix.value in
   let iy_lo = min_u16 i_iy.value j_iy.value in
@@ -305,7 +239,6 @@ let algo
 
   let ps64 = concat_msb [ ram0_rd; ps_lo_tmp.value ] in
 
-  (* allowed_sum = A - B - C + D *)
   let t1 = ps_a.value -: ps_b.value in
   let t2 = t1 -: ps_c.value in
   let allowed_sum = t2 +: ps_d.value in
@@ -313,232 +246,154 @@ let algo
   let ok   = allowed_sum ==: pair_area.value in
   let area = pair_area.value in
 
-  (* ---------------------------------------------------------- *)
-  (* FSM                                                         *)
-  (* ---------------------------------------------------------- *)
-
   compile
     [ sm.switch
         [ ( Loading
           , [ when_ load_finished
-                ( p0_req (of_int_trunc ~width:addr_bits 0)
-                @ p1_req (of_int_trunc ~width:addr_bits 0)
-                @ [ max_p1    <--. 0
-                  ; max_p2    <--. 0
-                  ; done_pending <-- gnd
-                  ; i_idx     <--. 0
-                  ; j_idx     <--. 0
-                  ; sm.set_next Magic_read
-                  ] )
-            ]
-          )
+                [ max_p1       <--. 0
+                ; max_p2       <--. 0
+                ; done_pending <-- gnd
+                ; i_idx        <--. 0
+                ; j_idx        <--. 0
+                ; (* If the load overflowed, bail out cleanly instead of running on garbage. *)
+                  if_ load_overflow
+                    [ done_pending <-- vdd
+                    ; sm.set_next Done
+                    ]
+                    [ sm.set_next Magic_read ]
+                ]
+            ] )
 
         ; ( Magic_read
-          , p0_req (of_int_trunc ~width:addr_bits 0)
-            @ [ sm.set_next Magic_consume ]
-          )
+          , p0_req (of_int_trunc ~width:addr_bits 0) @ [ sm.set_next Magic_consume ] )
         ; ( Magic_consume
-          , [ sm.set_next N_read ]
-          )
+          , [ sm.set_next N_read ] )
 
         ; ( N_read
-          , p0_req (of_int_trunc ~width:addr_bits 1)
-            @ [ sm.set_next N_consume ]
-          )
+          , p0_req (of_int_trunc ~width:addr_bits 1) @ [ sm.set_next N_consume ] )
         ; ( N_consume
           , [ n_points <-- ram0_rd
-
-              (* meta_base = 2 + 3*n_points *)
             ; meta_base <--
                 uresize ~width:addr_bits
                   ((of_int_trunc ~width:addr_bits 2)
                    +: uresize ~width:addr_bits (mul3_u32 ram0_rd))
-
-              (* base_ps = meta_base + 2 *)
             ; base_ps <--
                 uresize ~width:addr_bits
                   ( uresize ~width:addr_bits
                       ((of_int_trunc ~width:addr_bits 2)
                        +: uresize ~width:addr_bits (mul3_u32 ram0_rd))
                     +:. 2 )
-
-              (* init i=0 *)
             ; i_idx <--. 0
             ; sm.set_next Meta_w_read
-            ]
-          )
+            ] )
 
         ; ( Meta_w_read
-          , p0_req meta_base.value
-            @ [ sm.set_next Meta_w_consume ]
-          )
+          , p0_req meta_base.value @ [ sm.set_next Meta_w_consume ] )
         ; ( Meta_w_consume
-          , [ ps_w <-- ram0_rd
-            ; sm.set_next Meta_h_read
-            ]
-          )
+          , [ ps_w <-- ram0_rd; sm.set_next Meta_h_read ] )
 
         ; ( Meta_h_read
-          , p0_req (meta_base.value +:. 1)
-            @ [ sm.set_next Meta_h_consume ]
-          )
+          , p0_req (meta_base.value +:. 1) @ [ sm.set_next Meta_h_consume ] )
         ; ( Meta_h_consume
-          , [ ps_h <-- ram0_rd
-            ; sm.set_next I_read_x
-            ]
-          )
+          , [ ps_h <-- ram0_rd; sm.set_next I_read_x ] )
 
         ; ( I_read_x
-          , p0_req (point_base_addr i_idx.value)
-            @ [ sm.set_next I_consume_x ]
-          )
+          , p0_req (point_base_addr i_idx.value) @ [ sm.set_next I_consume_x ] )
         ; ( I_consume_x
-          , [ i_x <-- ram0_rd
-            ; sm.set_next I_read_y
-            ]
-          )
+          , [ i_x <-- ram0_rd; sm.set_next I_read_y ] )
 
         ; ( I_read_y
-          , p0_req (point_base_addr i_idx.value +:. 1)
-            @ [ sm.set_next I_consume_y ]
-          )
+          , p0_req (point_base_addr i_idx.value +:. 1) @ [ sm.set_next I_consume_y ] )
         ; ( I_consume_y
-          , [ i_y <-- ram0_rd
-            ; sm.set_next I_read_idx
-            ]
-          )
+          , [ i_y <-- ram0_rd; sm.set_next I_read_idx ] )
 
         ; ( I_read_idx
-          , p0_req (point_base_addr i_idx.value +:. 2)
-            @ [ sm.set_next I_consume_idx ]
-          )
+          , p0_req (point_base_addr i_idx.value +:. 2) @ [ sm.set_next I_consume_idx ] )
         ; ( I_consume_idx
           , [ i_ix <-- select ram0_rd ~high:15 ~low:0
             ; i_iy <-- select ram0_rd ~high:31 ~low:16
             ; sm.set_next J_init
-            ]
-          )
+            ] )
 
         ; ( J_init
-          , [ j_idx <-- i_idx.value +:. 1
-            ; sm.set_next J_read_x
-            ]
-          )
+          , [ j_idx <-- i_idx.value +:. 1; sm.set_next J_read_x ] )
 
         ; ( J_read_x
           , [ if_ (j_idx.value ==: n_points.value)
                 [ sm.set_next Next_i ]
                 (p1_req (point_base_addr j_idx.value) @ [ sm.set_next J_consume_x ])
-            ]
-          )
+            ] )
         ; ( J_consume_x
-          , [ j_x <-- ram1_rd
-            ; sm.set_next J_read_y
-            ]
-          )
+          , [ j_x <-- ram1_rd; sm.set_next J_read_y ] )
 
         ; ( J_read_y
-          , p1_req (point_base_addr j_idx.value +:. 1)
-            @ [ sm.set_next J_consume_y ]
-          )
+          , p1_req (point_base_addr j_idx.value +:. 1) @ [ sm.set_next J_consume_y ] )
         ; ( J_consume_y
-          , [ j_y <-- ram1_rd
-            ; sm.set_next J_read_idx
-            ]
-          )
+          , [ j_y <-- ram1_rd; sm.set_next J_read_idx ] )
 
         ; ( J_read_idx
-          , p1_req (point_base_addr j_idx.value +:. 2)
-            @ [ sm.set_next J_consume_idx ]
-          )
+          , p1_req (point_base_addr j_idx.value +:. 2) @ [ sm.set_next J_consume_idx ] )
         ; ( J_consume_idx
           , [ j_ix <-- select ram1_rd ~high:15 ~low:0
             ; j_iy <-- select ram1_rd ~high:31 ~low:16
             ; sm.set_next Pair_compute
-            ]
-          )
+            ] )
 
         ; ( Pair_compute
-          , [ (* Part 1 area *)
-              pair_area <--
-                compute_area_u32 i_x.value i_y.value j_x.value j_y.value
-
+          , [ pair_area <-- compute_area_u32 i_x.value i_y.value j_x.value j_y.value
             ; max_p1 <--
                 mux2
                   (compute_area_u32 i_x.value i_y.value j_x.value j_y.value >: max_p1.value)
                   (compute_area_u32 i_x.value i_y.value j_x.value j_y.value)
                   max_p1.value
-
             ; x_lo <-- uresize ~width:32 ix_lo
             ; x_hi <-- uresize ~width:32 (ix_hi +:. 1)
             ; y_lo <-- uresize ~width:32 iy_lo
             ; y_hi <-- uresize ~width:32 (iy_hi +:. 1)
-
-              (* init ps read *)
             ; ps_step <--. 0
             ; sm.set_next Ps_lo_read
-            ]
-          )
+            ] )
 
         ; ( Ps_lo_read
-          , p0_req (ps_entry_addr_lo ~yy:ps_y_sel ~xx:ps_x_sel)
-            @ [ sm.set_next Ps_lo_consume ]
-          )
+          , p0_req (ps_entry_addr_lo ~yy:ps_y_sel ~xx:ps_x_sel) @ [ sm.set_next Ps_lo_consume ] )
         ; ( Ps_lo_consume
-          , [ ps_lo_tmp <-- ram0_rd
-            ; sm.set_next Ps_hi_read
-            ]
-          )
+          , [ ps_lo_tmp <-- ram0_rd; sm.set_next Ps_hi_read ] )
 
         ; ( Ps_hi_read
-          , p0_req (ps_entry_addr_hi ~yy:ps_y_sel ~xx:ps_x_sel)
-            @ [ sm.set_next Ps_hi_consume ]
-          )
+          , p0_req (ps_entry_addr_hi ~yy:ps_y_sel ~xx:ps_x_sel) @ [ sm.set_next Ps_hi_consume ] )
         ; ( Ps_hi_consume
-          , [ (* store into A/B/C/D depending on ps_step *)
-              if_ (ps_step.value ==:. 0) [ ps_a <-- ps64 ] []
+          , [ if_ (ps_step.value ==:. 0) [ ps_a <-- ps64 ] []
             ; if_ (ps_step.value ==:. 1) [ ps_b <-- ps64 ] []
             ; if_ (ps_step.value ==:. 2) [ ps_c <-- ps64 ] []
             ; if_ (ps_step.value ==:. 3) [ ps_d <-- ps64 ] []
-
             ; if_
                 (ps_step.value ==:. 3)
                 [ sm.set_next Pair_evaluate ]
                 [ ps_step <-- ps_step.value +:. 1
                 ; sm.set_next Ps_lo_read
                 ]
-            ]
-          )
+            ] )
 
         ; ( Pair_evaluate
-          , [ max_p2 <--
-                mux2 (ok &: (area >: max_p2.value)) area max_p2.value
+          , [ max_p2 <-- mux2 (ok &: (area >: max_p2.value)) area max_p2.value
             ; sm.set_next Next_j
-            ]
-          )
+            ] )
 
         ; ( Next_j
-          , [ j_idx <-- j_idx.value +:. 1
-            ; sm.set_next J_read_x
-            ]
-          )
+          , [ j_idx <-- j_idx.value +:. 1; sm.set_next J_read_x ] )
 
         ; ( Next_i
           , [ i_idx <-- i_idx.value +:. 1
             ; if_ ((i_idx.value +:. 1) >=: n_points.value)
-                [ done_pending <-- vdd
-                ; sm.set_next Done ]
+                [ done_pending <-- vdd; sm.set_next Done ]
                 [ sm.set_next I_read_x ]
-            ]
-          )
+            ] )
 
         ; ( Done
-          , [ sm.set_next Done ]
-          )
+          , [ done_pending <-- vdd; sm.set_next Done ] )
         ]
     ];
 
-  (* drive port addresses + outputs *)
   ( p0_addr.value
   , p1_addr.value
   , max_p1.value
@@ -575,9 +430,9 @@ let create
       ~ram0_rd:ram.read_data.(0)
       ~ram1_rd:ram.read_data.(1)
       ~load_finished:loader.load_finished
+      ~load_overflow:loader.overflow
   in
 
-  (* Read ports: gate addresses until load is finished *)
   Ram.Port.Of_signal.assign ram_ports.(0)
     { address      = mux2 loader.load_finished addr0 (zero addr_bits)
     ; write_data   = zero 32
@@ -600,7 +455,8 @@ let create
   in
 
   { Ulx3s.O.
-    leds = concat_lsb [ ~:clear; uart_rx_overflow; loader.load_finished; zero 5 ]
+    (* LED[0]=~clear, LED[1]=uart_rx_overflow (external), LED[2]=loader overflow, LED[3]=load_finished *)
+    leds = concat_lsb [ ~:clear; uart_rx_overflow; loader.overflow; loader.load_finished; zero 4 ]
   ; uart_tx = byte_out
   ; uart_rx_ready = loader.uart_rx_ready
   }

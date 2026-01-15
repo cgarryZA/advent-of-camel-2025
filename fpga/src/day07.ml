@@ -211,6 +211,8 @@ module States = struct
     | TopoS0_Read
     | TopoS0_Commit
     | TopoS0_Append
+    | TopoS0_IndegRead
+    | TopoS1_IndegRead
     | TopoS1_Read
     | TopoS1_Commit
     | TopoS1_Append
@@ -598,6 +600,7 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; s0_valid <-- gnd
           ; s1_valid <-- gnd
 
+
           ; when_ q_is_exit
               [ (* exit node => no outgoing edges *)
                 edge_addr  <-- q_cur_id
@@ -616,11 +619,10 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ]
 
         ; CellEval,
-          [ (* part1 counts distinct reachable splitters: BFS guarantees each node once *)
-            when_ is_split [ part1 <-- part1.value +:. 1 ]
-
-          ; (* latch successors into regs for the RAM-latency states that follow *)
-            s0_r     <-- s0_r_n
+          [ (* latch successors into regs for the RAM-latency states that follow *)
+            when_ is_split
+              [ part1 <-- part1.value +:. 1 ]
+          ; s0_r     <-- s0_r_n
           ; s0_c     <-- s0_c_n
           ; s0_id    <-- s0_id_n
           ; s0_valid <-- uresize ~width:1 s0_valid_n
@@ -730,18 +732,6 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
               ]
           ]
 
-        ; TopoEdgeRead,
-          [ (* wait 1 cycle for Edge_ram read *)
-            sm.set_next TopoEdgeGot
-          ]
-
-        ; TopoGot,
-          [ topo_u    <-- topo_rd
-          ; topo_head <-- topo_head.value +:. 1
-          ; edge_addr <-- topo_rd
-          ; sm.set_next TopoEdgeGot
-          ]
-
         ; TopoGot,
           [ topo_u    <-- topo_rd
           ; topo_head <-- topo_head.value +:. 1
@@ -749,12 +739,31 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
           ; sm.set_next TopoEdgeRead
           ]
 
+        ; TopoEdgeRead,
+          [ (* wait 1 cycle for Edge_ram read *)
+            sm.set_next TopoEdgeGot
+          ]
+
+        ; TopoEdgeGot,
+          [ (* edge_rd is now valid *)
+            s0_id    <-- edge_s0_id
+          ; s1_id    <-- edge_s1_id
+          ; s0_valid <-- edge_s0_valid
+          ; s1_valid <-- edge_s1_valid
+          ; sm.set_next TopoS0_Read
+          ]
+
         ; TopoS0_Read,
           [ when_ s0_valid.value
               [ indeg_addr <-- s0_id.value
-              ; sm.set_next TopoS0_Commit
+              ; sm.set_next TopoS0_IndegRead
               ]
           ; when_ (~:(s0_valid.value)) [ sm.set_next TopoS1_Read ]
+          ]
+
+        ; TopoS0_IndegRead,
+          [ (* wait 1 cycle for indeg_rd *)
+            sm.set_next TopoS0_Commit
           ]
 
         ; TopoS0_Commit,
@@ -777,11 +786,15 @@ let create scope ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ U
         ; TopoS1_Read,
           [ when_ s1_valid.value
               [ indeg_addr <-- s1_id.value
-              ; sm.set_next TopoS1_Commit
+              ; sm.set_next TopoS1_IndegRead
               ]
           ; when_ (~:(s1_valid.value)) [ sm.set_next TopoRead ]
           ]
 
+        ; TopoS1_IndegRead,
+          [ (* wait 1 cycle for indeg_rd *)
+            sm.set_next TopoS1_Commit
+          ]
         ; TopoS1_Commit,
           [ indeg_addr  <-- s1_id.value
           ; indeg_wdata <-- uresize ~width:16 newv
