@@ -1,25 +1,30 @@
-# Christian Garry Advent of Hardcaml 2025
+
 <p align="center">
+  
   <img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/snowglobe_camel.png"
        alt="Advent of Camel logo"
        width="450"/>
-</p>
 
-<p align="center">
+
+<a name="readme-top"></a>
+
+# Advent of Hardcaml 2025 — Christian Garry 
+
+A hardware-first exploration of Advent of Code 2025, implementing each puzzle as a **cycle-accurate FPGA design** in **Hardcaml**, using streaming UART I/O, explicit memory pipelines, and finite-state schedulers instead of software control flow.
+
   <a href="#solutions"><img src="https://img.shields.io/badge/Solutions-View-1f6feb?style=for-the-badge"></a>
   <a href="fpga/src"><img src="https://img.shields.io/badge/Code-Browse-f85149?style=for-the-badge"></a>
   <a href="https://adventofcode.com/2025"><img src="https://img.shields.io/badge/AoC_2025-Problems-facc15?style=for-the-badge"></a>
   <a href="#execution-model"><img src="https://img.shields.io/badge/Design-Streaming_UART_FPGA-22c55e?style=for-the-badge"></a>
-</p>
 
-<p align="center">
   <a href="https://www.linkedin.com/in/christian-tt-garry/">
     <img src="https://img.shields.io/badge/LinkedIn-Christian_Garry-0A66C2?style=for-the-badge&logo=linkedin">
   </a>
   <a href="https://christiangarry.com">
     <img src="https://img.shields.io/badge/Website-christiangarry.com-111827?style=for-the-badge">
   </a>
-</p>
+
+</div>
 
 ## Introduction
 
