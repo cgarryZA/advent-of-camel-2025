@@ -43,7 +43,10 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
   </a>
   <a href="fpga/src">
     <img src="https://img.shields.io/badge/Code-Github_File_Viewer-f85149?style=for-the-badge">
-  </a><br/>
+  </a>
+  <a href="[https://adventofcode.com/2025](https://blog.janestreet.com/advent-of-fpga-challenge-2025/)">
+    <img src="https://img.shields.io/badge/Challenge-Advent_Of_FPGA-facc15?style=for-the-badge">
+  </a>
 </p>
 
 </div>
