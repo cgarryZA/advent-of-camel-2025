@@ -199,12 +199,12 @@ Each solution follows a deterministic **load–compute–report** structure: inp
 </tr>
 
 <tr>
-  <td><img src="https://img.shields.io/badge/07-Pending-3f3f46"></td>
+  <td><a href="#solutions"><img src="https://img.shields.io/badge/07-Pending-3f3f46"></td>
   <td><a href="#day-8"><img src="https://img.shields.io/badge/08-Done-22c55e"></a></td>
   <td><a href="#day-9"><img src="https://img.shields.io/badge/09-Done-22c55e"></a></td>
   <td><a href="#day-10"><img src="https://img.shields.io/badge/10-Done-22c55e"></a></td>
   <td><a href="#day-11"><img src="https://img.shields.io/badge/11-Done-22c55e"></a></td>
-  <td><img src="https://img.shields.io/badge/12-Pending-3f3f46"></td>
+  <td><a href="#solutions"><img src="https://img.shields.io/badge/12-Pending-3f3f46"></td>
 </tr>
 </table>
 
