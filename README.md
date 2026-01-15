@@ -15,19 +15,22 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 ### Contents
 <p align="center">
   <a href="#intro">
-    <img src="https://img.shields.io/badge/Introduction%C2%A0%C2%A0%C2%A0%C2%A0-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Introduction-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#setup">
-    <img src="https://img.shields.io/badge/Setup_Guide%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Setup_Guide-1f6feb?style=for-the-badge">
+  </a><br/>
+  <a href="#user-guide">
+    <img src="https://img.shields.io/badge/User_Guide-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#execution-model">
-    <img src="https://img.shields.io/badge/Execution_Model%C2%A0-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/Execution_Model-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#solutions">
     <img src="https://img.shields.io/badge/Solutions_Section-1f6feb?style=for-the-badge">
   </a><br/>
   <a href="#about">
-    <img src="https://img.shields.io/badge/About_Me%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0-1f6feb?style=for-the-badge">
+    <img src="https://img.shields.io/badge/About_Me-1f6feb?style=for-the-badge">
   </a>
 </p>
 
@@ -95,7 +98,9 @@ Once the correct opam switch is active, you can build and run the project as des
 
 ---
 
+<a name="user-guide"></a>
 ## Using the repo
+<a href="#internal-nav"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
 ```bash
 cd fpga
