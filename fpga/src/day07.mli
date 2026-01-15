@@ -1,4 +1,4 @@
-(* src/day08.mli *)
+(* src/day07.mli *)
 
 open! Core
 open! Hardcaml
