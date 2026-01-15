@@ -416,3 +416,6 @@ You can find more about my work and background here:
   </a>
 </div>
 
+---
+
+*Thanks to Jane Street and the Advent of Code team for publishing the Advent of FPGA challenge and accompanying visual material.*
