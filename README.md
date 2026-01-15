@@ -37,31 +37,36 @@ A hardware-first exploration of Advent of Code 2025, implementing each puzzle as
 
 ### Related Links
 
+<!-- Row 1 -->
 <p align="center">
   <a href="https://adventofcode.com/2025">
     <img src="https://img.shields.io/badge/Problems-AoC_2025-facc15?style=for-the-badge">
-  </a>&nbsp;&nbsp;
-
+  </a>
+  &nbsp;&nbsp;
   <a href="fpga/src">
     <img src="https://img.shields.io/badge/Code-Github_File_Viewer-f85149?style=for-the-badge">
-  </a>&nbsp;&nbsp;
-
+  </a>
+  &nbsp;&nbsp;
   <a href="https://blog.janestreet.com/advent-of-fpga-challenge-2025/">
     <img src="https://img.shields.io/badge/Challenge-Advent_of_FPGA-0ea5e9?style=for-the-badge">
-  </a><br><br>
+  </a>
+</p>
 
+<!-- Row 2 -->
+<p align="center">
   <a href="https://github.com/janestreet/hardcaml_template_project/tree/with-extensions">
     <img src="https://img.shields.io/badge/Jane_Street-Template-64748b?style=for-the-badge">
-  </a>&nbsp;&nbsp;
-
+  </a>
+  &nbsp;&nbsp;
   <a href="https://github.com/asinghani/advent-of-hardcaml-2024/">
     <img src="https://img.shields.io/badge/Anish-2024_Solutions-64748b?style=for-the-badge">
-  </a>&nbsp;&nbsp;
-
+  </a>
+  &nbsp;&nbsp;
   <a href="https://github.com/asinghani/advent-of-hardcaml-2025/">
     <img src="https://img.shields.io/badge/Anish-2025_Solutions-64748b?style=for-the-badge">
   </a>
 </p>
+
 
 </div>
 
