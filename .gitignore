@@ -4,6 +4,7 @@ _opam
 *.install
 *.merlin
 
+.vscode
 
 *.bc
 *.exe
