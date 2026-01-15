@@ -56,11 +56,14 @@ struct
     : _ O.t
     =
     let spec = Reg_spec.create ~clock ~clear () in
-    let init_in_progress = wire 1 in
     let init_counter =
       reg_fb spec ~width:(address_bits + 1) ~f:(fun x ->
-        mux2 init_in_progress (x +:. 1) x)
+        mux2
+          (if zero_on_startup then x <:. depth else gnd)
+          (x +:. 1)
+          x)
     in
+
     let init_in_progress =
       if zero_on_startup then init_counter <:. depth else gnd
     in

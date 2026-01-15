@@ -6,26 +6,19 @@ open! Signal
 open! Hardcaml.Always
 
 let clock_freq       = Ulx3s.Clock_freq.Clock_25mhz
-let uart_fifo_depth  = 64
+let uart_fifo_depth  = 32
 let extra_synth_args = []
 
 (* ====================== RAM ====================== *)
 
 module Ram = Loadable_pseudo_dual_port_ram.Make (struct
-  let width           = 64
-  let depth           = 16384
+  let width           = 32
+  let depth           = 8192
   let num_ports       = 2
   let zero_on_startup = false
 end)
 
 (* ====================== LOADER ====================== *)
-(* Input format (words):
-   w0 = point_count (u64)
-   payload:
-     addr 2*i     = x[i]
-     addr 2*i + 1 = y[i]
-   RTS ends load
-*)
 
 module Loader = struct
   module I = struct
@@ -42,46 +35,47 @@ module Loader = struct
     type 'a t =
       { load_finished : 'a
       ; ram_write     : 'a Ram.Port.t
-      ; point_count   : 'a [@bits 13]
+      ; data_words    : 'a [@bits 13]
       ; uart_rx_ready : 'a
       }
     [@@deriving hardcaml]
   end
 
-  let create _ ({ clock; clear; uart_rx; uart_rts } : _ I.t) : _ O.t =
+  let create _scope ({ clock; clear; uart_rx; uart_rts } : _ I.t) : _ O.t =
     let spec = Reg_spec.create ~clock ~clear () in
 
-    (* pack 8 bytes -> 1x 64-bit word *)
-    let word_in = Util.shift_in ~clock ~clear ~n:8 uart_rx in
+    (* Pack 4 bytes -> 1x 32-bit word *)
+    let word_in = Util.shift_in ~clock ~clear ~n:4 uart_rx in
 
-    (* counts received 64-bit words including header *)
+    (* Count 32-bit words written *)
     let word_count =
-      reg_fb spec ~width:14 ~enable:word_in.valid ~f:(fun x -> x +:. 1)
+      reg_fb spec ~width:13 ~enable:word_in.valid ~f:(fun x -> x +:. 1)
     in
 
-    let loaded      = Variable.reg spec ~width:1 in
-    let point_count = Variable.reg spec ~width:13 in
+    (* Sticky end-of-load *)
+    let loaded     = Variable.reg spec ~width:1 in
+    let data_words = Variable.reg spec ~width:13 in
+
+    (* If RTS happens in the same cycle as the last word write, include it. *)
+    let word_count_written =
+      mux2 word_in.valid (word_count +:. 1) word_count
+    in
 
     compile
-      [ when_ (word_in.valid &: (word_count ==:. 0))
-          [ point_count <-- select word_in.value ~high:12 ~low:0 ]
-      ; when_ uart_rts
-          [ loaded <-- vdd ]
-      ]
-    ;
-
-    (* payload starts at word 1 *)
-    let wr_en   = word_in.valid &: (word_count >=:. 1) in
-    let wr_addr = uresize ~width:14 (word_count -:. 1) in
+      [ when_ uart_rts
+          [ loaded     <-- vdd
+          ; data_words <-- word_count_written
+          ]
+      ];
 
     { O.
       load_finished = loaded.value
     ; ram_write =
-        { address      = wr_addr
+        { address      = word_count
         ; write_data   = word_in.value
-        ; write_enable = wr_en
+        ; write_enable = word_in.valid
         }
-    ; point_count   = point_count.value
+    ; data_words    = data_words.value
     ; uart_rx_ready = vdd
     }
   ;;
@@ -92,129 +86,186 @@ module Loader = struct
   ;;
 end
 
-(* ====================== ALGORITHM ====================== *)
+(* ====================== FSM ====================== *)
 
 module States = struct
   type t =
     | Loading
-    | Read_a
-    | Consume_a
-    | Read_b
-    | Consume_b
-    | Advance_b
-    | Advance_a
+    | Mode_read
+    | Mode_consume
+    | Op_read
+    | Op_consume
+    | Count_read
+    | Count_consume
+    | Value_lo_read
+    | Value_lo_consume
+    | Value_hi_read
+    | Value_hi_consume
+    | Fold_value
+    | Finish_problem
     | Done
   [@@deriving enumerate, sexp_of, compare ~localize]
 end
 
-let algo
-    ~clock
-    ~clear
-    ~(read_data : Signal.t array)
-    ~load_finished
-    ~(point_count : Signal.t)
-  =
+let algo ~clock ~clear ~read_word ~data_words:_ ~load_finished =
   let spec = Reg_spec.create ~clock ~clear () in
   let sm   = State_machine.create (module States) spec in
 
-  let a_idx = Variable.reg spec ~width:13 in
-  let b_idx = Variable.reg spec ~width:13 in
+  let rd_word = Variable.reg spec ~width:13 in
+  let rd_byte = Variable.reg spec ~width:2 in
 
-  let ax = Variable.reg spec ~width:64 in
-  let ay = Variable.reg spec ~width:64 in
+  let op_u8      = Variable.reg spec ~width:8 in
+  let remaining  = Variable.reg spec ~width:8 in
+  let value_lo   = Variable.reg spec ~width:8 in
+  let value_u16  = Variable.reg spec ~width:16 in
 
-  (* IMPORTANT: (|dx|+1) and (|dy|+1) are 64-bit, mul is 128-bit. *)
-  let max_area = Variable.reg spec ~width:128 in
+  let problem_acc = Variable.reg spec ~width:64 in
+  let global_sum  = Variable.reg spec ~width:64 in
+
+  let part1_res = Variable.reg spec ~width:64 in
+  let part2_res = Variable.reg spec ~width:64 in
+  let phase     = Variable.reg spec ~width:1 in  (* 0 = Part1 stream, 1 = Part2 stream *)
 
   let done_fired = Variable.reg spec ~width:1 in
-  let done_pulse = sm.is Done &: ~:(done_fired.value) in
 
-  (* loop bounds (assumes point_count >= 2) *)
-  let a_last = a_idx.value ==: (point_count -:. 2) in
-  let b_last = b_idx.value ==: (point_count -:. 1) in
+  let byte0 = select read_word ~high:7  ~low:0 in
+  let byte1 = select read_word ~high:15 ~low:8 in
+  let byte2 = select read_word ~high:23 ~low:16 in
+  let byte3 = select read_word ~high:31 ~low:24 in
 
-  (* drive RAM addresses: while reading A use a_idx, else use b_idx *)
-  let use_a = sm.is Read_a |: sm.is Consume_a in
-  let idx   = mux2 use_a a_idx.value b_idx.value in
-
-  let addr_x = uresize ~width:14 (idx @: gnd) in
-  let addr_y = uresize ~width:14 (idx @: vdd) in
-
-  (* In Consume_b, read_data.(0/1) are bx/by for the address presented in Read_b. *)
-  let bx = read_data.(0) in
-  let by = read_data.(1) in
-
-  let dx =
-    mux2 (ax.value >=: bx)
-      (ax.value -: bx)
-      (bx -: ax.value)
+  let sel_byte = mux rd_byte.value [ byte0; byte1; byte2; byte3 ] in
+  let part2_pulse =
+    (sm.is Count_consume)
+    &: (sel_byte ==:. 0)
+    &: (phase.value ==:. 1)
+  in
+  let advance =
+    let nb = rd_byte.value +:. 1 in
+    let wrap = nb ==:. 0 in
+    [ rd_byte <-- nb
+    ; rd_word <-- mux2 wrap (rd_word.value +:. 1) rd_word.value
+    ]
   in
 
-  let dy =
-    mux2 (ay.value >=: by)
-      (ay.value -: by)
-      (by -: ay.value)
+  let init_problem =
+    let is_mul = op_u8.value ==:. 1 in
+    [ problem_acc <--
+        mux2 is_mul
+          (of_int_trunc ~width:64 1)
+          (of_int_trunc ~width:64 0)
+    ]
   in
 
-  (* inclusive tile rectangle area *)
-  let w    = dx +:. 1 in
-  let h    = dy +:. 1 in
-  let area = w *: h in (* 128-bit *)
+  let fold_value =
+    let v64 = uresize ~width:64 value_u16.value in
+    let is_mul = op_u8.value ==:. 1 in
+    [ problem_acc <--
+        mux2 is_mul
+          (uresize ~width:64 (problem_acc.value *: v64))
+          (problem_acc.value +: v64)
+    ]
+  in
 
-  let bigger = area >: max_area.value in
+  let part1_pulse =
+    (sm.is Count_consume)
+    &: (sel_byte ==:. 0)
+    &: (phase.value ==:. 0)
+  in
 
   compile
     [ sm.switch
         [ ( Loading
           , [ when_ load_finished
-                [ a_idx      <--. 0
-                ; b_idx      <--. 1
-                ; ax         <--. 0
-                ; ay         <--. 0
-                ; max_area   <--. 0
+                [ rd_word    <--. 0
+                ; rd_byte    <--. 0
+                ; global_sum <--. 0
+                ; part1_res  <--. 0
+                ; part2_res  <--. 0
+                ; phase      <-- gnd
                 ; done_fired <-- gnd
-                ; sm.set_next Read_a
+                ; sm.set_next Mode_read
                 ]
             ]
           )
 
-        ; ( Read_a
-          , [ sm.set_next Consume_a ]
-          )
-
-        ; ( Consume_a
-          , [ ax <-- read_data.(0)
-            ; ay <-- read_data.(1)
-            ; b_idx <-- (a_idx.value +:. 1)
-            ; sm.set_next Read_b
+        ; ( Mode_read
+          , [ (* wait 1 cycle for RAM read to settle *)
+              sm.set_next Mode_consume
             ]
           )
 
-        ; ( Read_b
-          , [ sm.set_next Consume_b ]
+        ; ( Mode_consume
+          , [ (* discard "mode" byte in stream *)
+              sm.set_next Op_read
+            ] @ advance
           )
 
-        ; ( Consume_b
-          , [ when_ bigger [ max_area <-- area ]
-            ; sm.set_next Advance_b
-            ]
+        ; ( Op_read
+          , [ sm.set_next Op_consume ]
           )
 
-        ; ( Advance_b
-          , [ if_ b_last
-                [ sm.set_next Advance_a ]
-                [ b_idx <-- (b_idx.value +:. 1)
-                ; sm.set_next Read_b
+        ; ( Op_consume
+          , [ op_u8 <-- sel_byte
+            ; sm.set_next Count_read
+            ] @ advance
+          )
+
+        ; ( Count_read
+          , [ sm.set_next Count_consume ]
+          )
+
+        ; ( Count_consume
+          , [ remaining <-- sel_byte ]
+            @
+            [ if_ (sel_byte ==:. 0)
+                [ (* delimiter between Part1/Part2 streams, or end delimiter *)
+                  if_ (phase.value ==:. 0)
+                    [ part1_res  <-- global_sum.value
+                    ; global_sum <--. 0
+                    ; phase      <-- vdd
+                    ; sm.set_next Mode_read
+                    ]
+                    [ part2_res  <-- global_sum.value
+                    ; sm.set_next Done
+                    ]
                 ]
+                ( init_problem @ [ sm.set_next Value_lo_read ] )
             ]
+            @ advance
           )
 
-        ; ( Advance_a
-          , [ if_ a_last
-                [ sm.set_next Done ]
-                [ a_idx <-- (a_idx.value +:. 1)
-                ; sm.set_next Read_a
-                ]
+        ; ( Value_lo_read
+          , [ sm.set_next Value_lo_consume ]
+          )
+
+        ; ( Value_lo_consume
+          , [ value_lo <-- sel_byte
+            ; sm.set_next Value_hi_read
+            ] @ advance
+          )
+
+        ; ( Value_hi_read
+          , [ sm.set_next Value_hi_consume ]
+          )
+
+        ; ( Value_hi_consume
+          , [ (* LE: value = lo | (hi<<8) *)
+              value_u16 <-- concat_msb [ sel_byte; value_lo.value ]
+            ; sm.set_next Fold_value
+            ] @ advance
+          )
+
+        ; ( Fold_value
+          , [ remaining <-- remaining.value -:. 1
+            ; if_ (remaining.value ==:. 1)
+                [ sm.set_next Finish_problem ]
+                [ sm.set_next Value_lo_read ]
+            ] @ fold_value
+          )
+
+        ; ( Finish_problem
+          , [ global_sum <-- global_sum.value +: problem_acc.value
+            ; sm.set_next Op_read
             ]
           )
 
@@ -222,10 +273,13 @@ let algo
           , [ when_ (done_fired.value ==:. 0) [ done_fired <-- vdd ] ]
           )
         ]
-    ]
-  ;
+    ];
 
-  addr_x, addr_y, max_area.value, done_pulse
+  rd_word.value,
+  part1_res.value,
+  part2_res.value,
+  part1_pulse,
+  part2_pulse
 ;;
 
 (* ====================== TOP ====================== *)
@@ -234,59 +288,61 @@ let create
     scope
     ({ clock; clear; uart_rx; uart_rts; uart_rx_overflow; _ } : _ Ulx3s.I.t)
   =
-  let loader =
-    Loader.hierarchical scope { clock; clear; uart_rx; uart_rts }
-  in
+  let loader = Loader.hierarchical scope { clock; clear; uart_rx; uart_rts } in
 
-  let ram_ports =
-    Array.init 2 ~f:(fun _ -> Ram.Port.Of_signal.wires ())
-  in
+  let ram_ports = Array.init 2 ~f:(fun _ -> Ram.Port.Of_signal.wires ()) in
+  let part1_valid = Variable.reg ~width:1 (Reg_spec.create ~clock ~clear ()) in
+  let part2_valid = Variable.reg ~width:1 (Reg_spec.create ~clock ~clear ()) in
+
 
   let%tydi ram =
     Ram.hierarchical ~name:"ram" scope
       { clock
       ; clear
-      ; load_ports    = [| loader.ram_write; Ram.Port.unused |]
+      ; load_ports = [| loader.ram_write; Ram.Port.unused |]
       ; load_finished = loader.load_finished
       ; ram_ports
       }
   in
 
-  let addr_x, addr_y, max_area_128, done_pulse =
+  let addr, p1, p2, p1_pulse, p2_pulse =
     algo
-      ~clock ~clear
-      ~read_data:ram.read_data
+      ~clock
+      ~clear
+      ~read_word:ram.read_data.(0)
+      ~data_words:loader.data_words
       ~load_finished:loader.load_finished
-      ~point_count:loader.point_count
   in
 
+  compile
+    [ when_ p1_pulse [ part1_valid <-- vdd ]
+    ; when_ p2_pulse [ part2_valid <-- vdd ]
+    ];
+
   Ram.Port.Of_signal.assign ram_ports.(0)
-    { address      = addr_x
-    ; write_data   = zero 64
+    { address      = mux2 loader.load_finished addr (zero 13)
+    ; write_data   = zero 32
     ; write_enable = gnd
-    }
-  ;
+    };
 
   Ram.Port.Of_signal.assign ram_ports.(1)
-    { address      = addr_y
-    ; write_data   = zero 64
+    { address      = zero 13
+    ; write_data   = zero 32
     ; write_enable = gnd
-    }
-  ;
+    };
 
-  (* Print module in this repo expects both valids to fire (Day05 style). *)
   let%tydi { byte_out } =
     Print_decimal_outputs.hierarchical scope
       { clock
       ; clear
-      ; part1 = { value = uresize ~width:60 max_area_128; valid = done_pulse }
-      ; part2 = { value = zero 60;                    valid = done_pulse }
+      ; part1 = { value = uresize ~width:60 p1; valid = part1_valid.value }
+      ; part2 = { value = uresize ~width:60 p2; valid = part2_valid.value }
       }
   in
 
   { Ulx3s.O.
-    leds          = concat_lsb [ ~:clear; uart_rx_overflow; loader.load_finished; zero 5 ]
-  ; uart_tx       = byte_out
+    leds = concat_lsb [ ~:clear; uart_rx_overflow; loader.load_finished; zero 5 ]
+  ; uart_tx = byte_out
   ; uart_rx_ready = loader.uart_rx_ready
   }
 ;;

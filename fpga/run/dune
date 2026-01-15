@@ -6,10 +6,12 @@
   run_day04
   run_day05
   run_day06
+  run_day07
   run_day08
   run_day09
   run_day10
   run_day11
+  run_day12
   )
  (libraries
   core
