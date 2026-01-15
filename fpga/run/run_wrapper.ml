@@ -154,6 +154,11 @@ let get_uart_output t =
   Queue.to_list t.recv_buffer |> String.of_char_list
 ;;
 
+let normalize = function
+  | "" -> Some "0"
+  | s  -> Some s
+;;
+
 let extract_parts (output : string) =
   let part1 = ref None in
   let part2 = ref None in
@@ -163,9 +168,11 @@ let extract_parts (output : string) =
   |> List.iter ~f:(fun line ->
        match String.strip line with
        | s when String.is_prefix s ~prefix:"Part 1:" ->
-           part1 := Some (String.strip (String.drop_prefix s 7))
+           part1 :=
+             normalize (String.strip (String.drop_prefix s 7))
        | s when String.is_prefix s ~prefix:"Part 2:" ->
-           part2 := Some (String.strip (String.drop_prefix s 7))
+           part2 :=
+             normalize (String.strip (String.drop_prefix s 7))
        | _ -> ());
 
   (!part1, !part2)
