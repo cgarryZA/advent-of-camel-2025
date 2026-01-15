@@ -1,5 +1,4 @@
-
-<p align="center">
+<div align="center">
   
   <img src="https://raw.githubusercontent.com/cgarryZA/advent-of-camel-2025/main/snowglobe_camel.png"
        alt="Advent of Camel logo"
