@@ -355,7 +355,7 @@ For part 2, the final edge that completes the spanning tree is detected directly
 The entire computation is performed as a single pass over the edge stream, with no buffering or sorting in hardware. All memory access patterns are explicit and deterministic, and the design cleanly separates load, union–find traversal, and result extraction.
 
 <a name="day-9"></a>
-### Day 9, Part 1
+### Day 9
 
 <p>
 <a href="#solutions"><img src="https://img.shields.io/badge/Back_to-Solutions-8b949e"></a>
