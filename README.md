@@ -316,7 +316,7 @@ For part 2, the design accumulates the total coverage of all merged ranges by su
 
 For part 1, each item is tested against the merged ranges. Items and ranges are both traversed in ascending order, allowing early termination when an item is known to lie outside all remaining ranges. This avoids unnecessary comparisons and ensures the query phase remains linear in the size of the input.
 
-The entire computation is performed without sorting in hardware, relying instead on the problem’s ordering guarantees. All memory accesses are sequential, and the design uses a small finite-state machine to coordinate merge, flush, and query phases.
+The entire computation is performed without sorting in hardware, range ordering is enforced in the host-side input parser (sorted by lo then hi), allowing a single-pass merge in hardware. All memory accesses are sequential, and the design uses a small finite-state machine to coordinate merge, flush, and query phases.
 
 <a name="day-6"></a>
 ### Day 6
