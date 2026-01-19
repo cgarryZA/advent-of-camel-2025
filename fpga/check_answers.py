@@ -65,9 +65,9 @@ def main():
             print(f"✅ Day {day} {part} OK ({a})")
 
     if ok:
-        print(f"\nDay {day} PASSED")
+        print(f"\nDay {day} PASSED\n")
     else:
-        print(f"\nDay {day} COMPLETED WITH MISMATCHES")
+        print(f"\nDay {day} COMPLETED WITH MISMATCHES\n")
 
     sys.exit(0)
 
