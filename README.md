@@ -257,6 +257,11 @@ make tests
 Runs the Python answer checker against all days listed in answers.json
 without running the hardware simulations.
 
+```bash
+make test-X
+```
+Runs the Python answer checker against day X (leading zero) without running the hardware simulations.
+
 <a name="execution-model"></a>
 ## Execution Model
 <a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
