@@ -18,6 +18,34 @@ module Results = struct
   let update ~day ~part1 ~part2 =
     Hashtbl.set table ~key:day ~data:{ part1; part2 }
 
+  let read_file_opt path =
+    match Sys_unix.file_exists path with
+    | `Yes -> Some (In_channel.read_all path)
+    | _ -> None
+
+  let parse_existing_entries text =
+    let re =
+      Re.Perl.compile_pat
+        {|\"(\d+)\"\s*:\s*\{\s*\"part1\"\s*:\s*(null|\d+)\s*,\s*\"part2\"\s*:\s*(null|\d+)\s*\}|}
+    in
+    Re.all re text
+    |> List.filter_map ~f:(fun g ->
+        match Re.Group.all g with
+        | [| _; day; p1; p2 |] ->
+            let part v =
+              if String.equal v "null" then None else Some v
+            in
+            Some (Int.of_string day, part p1, part p2)
+        | _ -> None)
+
+  let load_from_json_file path =
+    match read_file_opt path with
+    | None -> ()
+    | Some text ->
+        parse_existing_entries text
+        |> List.iter ~f:(fun (day, part1, part2) ->
+            Hashtbl.set table ~key:day ~data:{ part1; part2 })
+
   let to_json () =
     let entries =
       Hashtbl.to_alist table
@@ -37,6 +65,9 @@ module Results = struct
     ^ String.concat ~sep:",\n" entries
     ^ "\n}\n"
 end
+
+let () =
+  Results.load_from_json_file "inputs/outputs.json"
 
 (* ---------- Colours ---------- *)
 module Color = struct

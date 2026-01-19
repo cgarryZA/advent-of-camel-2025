@@ -1,3 +1,4 @@
+MAKEFLAGS += --no-print-directory
 INSTALL_ARGS := $(if $(PREFIX),--prefix $(PREFIX),)
 
 DAYS_ALL := 01 02 03 04 05 06 07 08 09 10 11 12
@@ -34,11 +35,18 @@ tests:
 	  $(PYTHON) $(CHECK) $$d || exit 1; \
 	done
 
-tests-%:
-	@$(MAKE) tests DAYS=$*
-
 check: run tests
 
-check-%: run-% tests-%
+tests-%:
+	$(PYTHON) $(CHECK) $*
 
-.PHONY: default install uninstall reinstall clean check run tests
+check-%:
+	$(MAKE) run-$*
+	$(MAKE) tests-$*
+
+promote:
+	@test -f inputs/outputs.json || (echo "outputs.json missing"; exit 1)
+	@echo "Promoting outputs.json → answers.json"
+	cp inputs/outputs.json inputs/answers.json
+
+.PHONY: default install uninstall reinstall clean check run tests promote

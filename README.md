@@ -80,7 +80,7 @@ This repository contains synthesizable FPGA implementations of selected [Advent 
 
 This project is based on the [Jane Street Hardcaml Template Project](https://github.com/janestreet/hardcaml_template_project/tree/with-extensions), with the structure and UART infrastructure rebuilt and updated from the [2024 Advent of Hardcaml](https://github.com/asinghani/advent-of-hardcaml-2024/) designs to match current versions of Hardcaml and dune.
 
-This repository contains solutions for each day of AoC bar day 7, and part 2 of day 10.
+This repository contains solutions for selected Advent of Code 2025 problems, excluding day 7, and including part 1 only for day 10.
 
 <br>
 <p align="center">
@@ -136,8 +136,13 @@ Once the correct opam switch is active, you can build and run the project as des
 ## Using the repo
 <a href="#readme-top"> <img src="https://img.shields.io/badge/Back_to-Navigation-8b949e"> </a>
 
+All commands must be run from inside the `fpga` folder
+
 ```bash
 cd fpga
+```
+
+```bash
 dune runtest
 ```
 
@@ -161,13 +166,11 @@ These results are then compared against the reference file:
 which contains the known-correct answers for each completed day.
 
 ```bash
-cd fpga
-make run-all
+make run
 ```
 This command runs all completed days against the full input from the Advent of Code website. If you do this day 2 runs very slowly so expect that.
 
 ```bash
-cd fpga
 make run-XX
 ```
 
@@ -184,7 +187,33 @@ and tell you exactly where to save it:
 
 `/inputs/inputX.txt`
 
-When you clone this repo you will need to populate the answers.json with your own personal answers to AoC. This file is treated as the explicit source of truth.
+### Validation & Testing
+When you clone this repo you will need to populate the `/inputs/answers.json` with your own personal answers to AoC. This file is treated as the explicit source of truth.
+
+You can populate the answers.json by running all the days which will generate an answer from your input files and then running:
+
+```bash
+make promote
+```
+
+This will replace the current answers.json with the values in `outputs.json`
+
+```bash
+make check
+```
+Runs all days, then validates the outputs against answers.json.
+This is the main “everything passed” command.
+
+```bash
+make check-XX
+```
+Runs and validates a single day (e.g. make check-09).
+
+```bash
+make tests
+```
+Runs the Python answer checker against all days listed in answers.json
+without running the hardware simulations.
 
 <a name="execution-model"></a>
 ## Execution Model
