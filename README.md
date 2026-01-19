@@ -190,13 +190,13 @@ and tell you exactly where to save it:
 ### Validation & Testing
 When you clone this repo you will need to populate the `/inputs/answers.json` with your own personal answers to AoC. This file is treated as the explicit source of truth.
 
-You can populate the answers.json by running all the days which will generate an answer from your input files and then running:
+You can populate the answers.json by running all the days. This will generate an `/inputs/outputs.json` from your input files, You should then check that this is consistent with your true AoC puzzle solutions. If they are correct then you can run:
 
 ```bash
 make promote
 ```
 
-This will replace the current answers.json with the values in `outputs.json`
+This will replace the current answers.json with the values in `outputs.json`.
 
 ```bash
 make check
