@@ -37,7 +37,7 @@ tests:
 
 check: run tests
 
-tests-%:
+test-%:
 	$(PYTHON) $(CHECK) $*
 
 check-%:
