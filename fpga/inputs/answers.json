@@ -1,14 +1,14 @@
 {
-  "1":  { "part1": null, "part2": null },
-  "2":  { "part1": null, "part2": null },
-  "3":  { "part1": null, "part2": null },
-  "4":  { "part1": null, "part2": null },
-  "5":  { "part1": null, "part2": null },
-  "6":  { "part1": null, "part2": null },
-  "7":  { "part1": null, "part2": null },
-  "8":  { "part1": null, "part2": null },
-  "9":  { "part1": null, "part2": null },
-  "10": { "part1": null, "part2": null },
-  "11": { "part1": null, "part2": null },
-  "12": { "part1": null, "part2": null }
+  "1":  { "part1": 1123, "part2": 6695 },
+  "2":  { "part1": 32976912643, "part2": 54446379122 },
+  "3":  { "part1": 17403, "part2": 173416889848394 },
+  "4":  { "part1": 1389, "part2": 9000 },
+  "5":  { "part1": 798, "part2": 366181852921027 },
+  "6":  { "part1": 6343365546996, "part2": 11136895955912 },
+  "7":  { "part1": 1546, "part2": 13883459503480 },
+  "8":  { "part1": 131150, "part2": 2497445 },
+  "9":  { "part1": 4777824480, "part2": 1542119040 },
+  "10": { "part1": 502, "part2": 21467 },
+  "11": { "part1": 788, "part2": 316291887968000 },
+  "12": { "part1": 519, "part2": null }
 }

@@ -50,6 +50,7 @@ type t =
   { sim : Sim.t
   ; recv_buffer : char Queue.t
   ; cycles_between_bytes : int
+  ; mutable cycles : int
   }
 
 let create
@@ -93,15 +94,20 @@ let create
   i.clear := Bits.gnd;
   Cyclesim.cycle sim;
 
-  { sim; recv_buffer = Queue.create (); cycles_between_bytes }
+  { sim
+  ; recv_buffer = Queue.create ()
+  ; cycles_between_bytes
+  ; cycles = 0
+  }
 ;;
 
-let cycle ?(n = 1) { sim; recv_buffer; _ } =
-  let o = Cyclesim.outputs sim in
+let cycle ?(n = 1) t =
+  let o = Cyclesim.outputs t.sim in
   for _ = 1 to n do
-    Cyclesim.cycle sim;
+    Cyclesim.cycle t.sim;
+    t.cycles <- t.cycles + 1;
     if Bits.to_bool !(o.uart_tx.valid) then
-      Queue.enqueue recv_buffer (Bits.to_char !(o.uart_tx.value))
+      Queue.enqueue t.recv_buffer (Bits.to_char !(o.uart_tx.value))
   done
 ;;
 
@@ -306,9 +312,17 @@ let run_day
       ~vcd_file
       ()
   in
-
+  
   feed_inputs sim inputs;
+
+  let cycles_before_compute = sim.cycles in
+
   cycle ~n:run_cycles sim;
+
+  let compute_cycles = sim.cycles - cycles_before_compute in
+
+  printf "%sCycles:%s total=%d  compute=%d\n"
+    Color.blue Color.reset sim.cycles compute_cycles;
 
   let output = get_uart_output sim in
 
